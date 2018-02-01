@@ -48,15 +48,10 @@ func StructMatcher(expected interface{}, actual interface{}, shouldFilter bool, 
 			if shouldFilter && ((filterInclude && !filterMap[fieldName]) || (!filterInclude && filterMap[fieldName])) {
 				continue
 			}
-			fieldIsStruct := actualField.Kind() == reflect.Struct && !actualField.IsNil()
 			actualFieldIsNonemptySlice := actualField.Kind() == reflect.Slice && !actualField.IsNil() && actualField.Len() > 0
 			expectedFieldIsNonemptySlice := expectedField.Kind() == reflect.Slice && !expectedField.IsNil() && expectedField.Len() > 0
 			fieldIsStructSlice := actualFieldIsNonemptySlice && expectedFieldIsNonemptySlice && actualField.Len() == expectedField.Len() && actualField.Index(0).Kind() == reflect.Struct
-			if fieldIsStruct {
-				expectedStructField := expectedStruct.Field(i).Interface()
-				actualStructField := actualStruct.Field(i).Interface()
-				mismatches = append(mismatches, StructMatcher(expectedStructField, actualStructField, shouldFilter, filterInclude, nestedFilterFields...)...)
-			} else if fieldIsStructSlice {
+			if fieldIsStructSlice {
 				for j := 0; j < actualField.Len(); j++ {
 					expectedStructField := expectedStruct.Field(i).Index(j).Interface()
 					actualStructField := actualStruct.Field(i).Index(j).Interface()
@@ -65,7 +60,7 @@ func StructMatcher(expected interface{}, actual interface{}, shouldFilter bool, 
 			} else {
 				expectedValue := expectedStruct.Field(i).Interface()
 				actualValue := actualStruct.Field(i).Interface()
-				Expect(expectedValue).To(Equal(actualValue), "Mismatch on field %s", fieldName)
+				Expect(actualValue).To(Equal(expectedValue), "Mismatch on field %s", fieldName)
 			}
 		}
 	})...)
