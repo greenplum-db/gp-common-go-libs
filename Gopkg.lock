@@ -31,6 +31,7 @@
   packages = [
     ".",
     "format",
+    "gbytes",
     "internal/assertion",
     "internal/asyncassertion",
     "internal/oraclematcher",
@@ -46,6 +47,12 @@
   version = "v1.3.0"
 
 [[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
+
+[[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = [
@@ -53,13 +60,13 @@
     "html/atom",
     "html/charset"
   ]
-  revision = "0ed95abb35c445290478a5348a7b38bb154135fd"
+  revision = "b417086c80e91bfa321ef761574721644b8b9f61"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "3dbebcf8efb6a5011a60c2b4591c1022a759af8a"
+  revision = "8f27ce8a604014414f8dfffc25cbcde83a3f2216"
 
 [[projects]]
   branch = "master"
@@ -94,6 +101,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ce39f778f30ed0adb6974df1de4a82fd21cb804846703583babd4442be295342"
+  inputs-digest = "516e3e414cae0c645971f195e8810307d2f1dc8c3339b0f53bfc1176cd337bee"
   solver-name = "gps-cdcl"
   solver-version = 1
