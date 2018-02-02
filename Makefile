@@ -29,7 +29,7 @@ lint :
 		gometalinter --config=gometalinter.config -s vendor ./...
 
 unit :
-		ginkgo -r -randomizeSuites -randomizeAllSpecs structmatcher 2>&1
+		ginkgo -r -randomizeSuites -randomizeAllSpecs structmatcher gplog 2>&1
 
 test : lint unit
 
