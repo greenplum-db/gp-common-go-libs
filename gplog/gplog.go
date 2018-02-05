@@ -9,9 +9,8 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/user"
-	"time"
 
+	"github.com/greenplum-db/gp-common-go-libs/operating"
 	"github.com/pkg/errors"
 )
 
@@ -22,8 +21,9 @@ var (
 	 *   1: Completed, but encountered a non-fatal error (set by logger.Error)
 	 *   2: Did not complete, encountered a fatal error (set by logger.Fatal)
 	 */
-	errorCode              = 0
-	HeaderFuncs HeaderInfo = &RealHeaderInfo{}
+	errorCode = 0
+	// Singleton logger used by any package or utility that calls InitializeLogging
+	logger *Logger
 )
 
 const (
@@ -68,37 +68,34 @@ type Logger struct {
 	logFileName string
 	verbosity   int
 	header      string
-	HeaderInfo
-}
-
-type HeaderInfo interface {
-	CurrentUser() (*user.User, error)
-	Getpid() int
-	Hostname() (string, error)
-	Now() time.Time
-}
-
-type RealHeaderInfo struct{}
-
-func (headerInfo *RealHeaderInfo) CurrentUser() (*user.User, error) {
-	return user.Current()
-}
-
-func (headerInfo *RealHeaderInfo) Getpid() int {
-	return os.Getpid()
-}
-
-func (headerInfo *RealHeaderInfo) Hostname() (string, error) {
-	return os.Hostname()
-}
-
-func (headerInfo *RealHeaderInfo) Now() time.Time {
-	return time.Now()
 }
 
 /*
  * Logger initialization/helper functions
  */
+
+/*
+ * Multiple calls to InitializeLogging can be made if desired; the first call
+ * will initialize the logger as a singleton and subsequent calls will return
+ * the same Logger instance.
+ */
+func InitializeLogging(program string, logdir string) *Logger {
+	if logger != nil {
+		return logger
+	}
+	currentUser, _ := operating.System.CurrentUser()
+	if logdir == "" {
+		logdir = fmt.Sprintf("%s/gpAdminLogs", currentUser.HomeDir)
+	}
+
+	createLogDirectory(logdir)
+	timestamp := operating.System.Now().Format("20060102")
+	logfile := fmt.Sprintf("%s/%s_%s.log", logdir, program, timestamp)
+	logFileHandle := openLogFile(logfile)
+
+	logger = NewLogger(os.Stdout, os.Stderr, logFileHandle, logfile, LOGINFO, program)
+	return logger
+}
 
 // stdout and stderr are passed in to this function to enable output redirection in tests.
 func NewLogger(stdout io.Writer, stderr io.Writer, logFile io.Writer, logFileName string, verbosity int, program string) *Logger {
@@ -112,19 +109,23 @@ func NewLogger(stdout io.Writer, stderr io.Writer, logFile io.Writer, logFileNam
 	}
 }
 
+func SetLogger(log *Logger) {
+	logger = log
+}
+
 func getHeader(program string) string {
 	headerFormatStr := "%s:%s:%s:%06d-[%s]:-" // PROGRAMNAME:USERNAME:HOSTNAME:PID-[LOGLEVEL]:-
-	currentUser, _ := HeaderFuncs.CurrentUser()
+	currentUser, _ := operating.System.CurrentUser()
 	user := currentUser.Username
-	host, _ := HeaderFuncs.Hostname()
-	pid := HeaderFuncs.Getpid()
+	host, _ := operating.System.Hostname()
+	pid := operating.System.Getpid()
 	header := fmt.Sprintf(headerFormatStr, program, user, host, pid, "%s")
 	return header
 
 }
 
 func (logger *Logger) GetLogPrefix(level string) string {
-	logTimestamp := HeaderFuncs.Now().Format("20060102:15:04:05")
+	logTimestamp := operating.System.Now().Format("20060102:15:04:05")
 	return fmt.Sprintf("%s %s", logTimestamp, fmt.Sprintf(logger.header, level))
 }
 
@@ -138,6 +139,10 @@ func (logger *Logger) GetVerbosity() int {
 
 func (logger *Logger) SetVerbosity(verbosity int) {
 	logger.verbosity = verbosity
+}
+
+func GetErrorCode() int {
+	return errorCode
 }
 
 /*
@@ -210,10 +215,6 @@ func formatStackTrace(err error) string {
 	return message
 }
 
-func GetErrorCode() int {
-	return errorCode
-}
-
 /*
  * Abort() is for handling critical errors.  It panic()s to unwind the call stack
  * until the panic is caught by the recover() in DoTeardown() in backup.go, at
@@ -232,4 +233,28 @@ func abort(output ...interface{}) {
 		}
 	}
 	panic(errStr)
+}
+func openLogFile(filename string) io.WriteCloser {
+	flags := os.O_APPEND | os.O_CREATE | os.O_WRONLY
+	fileHandle, err := operating.System.OpenFileWrite(filename, flags, 0644)
+	if err != nil {
+		abort(err)
+	}
+	return fileHandle
+}
+
+func createLogDirectory(dirname string) {
+	info, err := operating.System.Stat(dirname)
+	if err != nil {
+		if operating.System.IsNotExist(err) {
+			err = operating.System.MkdirAll(dirname, 0755)
+			if err != nil {
+				abort(errors.Errorf("Cannot create log directory %s: %v", dirname, err))
+			}
+		} else {
+			abort(errors.Errorf("Cannot stat log directory %s: %v", dirname, err))
+		}
+	} else if !(info.IsDir()) {
+		abort(errors.Errorf("%s is a file, not a directory", dirname))
+	}
 }
