@@ -109,6 +109,10 @@ func NewLogger(stdout io.Writer, stderr io.Writer, logFile io.Writer, logFileNam
 	}
 }
 
+func GetLogger() *Logger {
+	return logger
+}
+
 func SetLogger(log *Logger) {
 	logger = log
 }
@@ -202,6 +206,12 @@ func (logger *Logger) Fatal(err error, s string, v ...interface{}) {
 		abort(message + stackTraceStr)
 	} else {
 		abort(message)
+	}
+}
+
+func (logger *Logger) FatalOnError(err error) {
+	if err != nil {
+		logger.Fatal(err, "")
 	}
 }
 
