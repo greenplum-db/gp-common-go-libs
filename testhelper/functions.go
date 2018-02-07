@@ -77,3 +77,8 @@ func ShouldPanicWithMessage(message string) {
 		Fail("Function did not panic as expected")
 	}
 }
+
+func AssertQueryRuns(connection *dbconn.DBConn, query string) {
+	_, err := connection.Exec(query)
+	Expect(err).To(BeNil(), "%s", query)
+}
