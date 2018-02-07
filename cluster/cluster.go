@@ -1,9 +1,8 @@
 package cluster
 
 /*
- * This file contains structs and functions used in both backup and restore
- * related to interacting with files and directories, both locally and
- * remotely over SSH.
+ * This file contains structs and functions related to interacting
+ * with files and directories, both locally and remotely over SSH.
  */
 
 import (
@@ -175,10 +174,6 @@ func LogFatalClusterError(errMessage string, numErrors int) {
 	}
 	gplog.Fatal(errors.Errorf("%s on %d segment%s. See %s for a complete list of segments with errors.", errMessage, numErrors, s, gplog.GetLogFilePath()), "")
 }
-
-/*
- * Shared cluster functions that are used in both backup and restore
- */
 
 func (cluster *Cluster) GetContentList() []int {
 	return cluster.ContentIDs

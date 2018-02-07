@@ -46,7 +46,7 @@ const (
  *
  * The intended usage of these functions is as follows:
  * - Info: Messages that should always be written unless the user explicitly
- *         suppresses output, e.g. the timestamp that will be used in the backup.
+ *         suppresses output
  * - Verbose: More detailed messages that are mostly useful to the user, e.g.
  *            printing information about a function's substeps for progress tracking.
  * - Debug: More detailed messages that are mostly useful to developers, e.g.
@@ -227,7 +227,7 @@ func formatStackTrace(err error) string {
 
 /*
  * Abort() is for handling critical errors.  It panic()s to unwind the call stack
- * until the panic is caught by the recover() in DoTeardown() in backup.go, at
+ * until the panic is caught by the recover() in DoTeardown(), at
  * which point any necessary cleanup is performed.
  *
  * log.Fatal() calls Abort() after logging its arguments, so generally that function
