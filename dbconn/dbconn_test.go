@@ -15,15 +15,11 @@ import (
 	"github.com/jmoiron/sqlx"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gbytes"
 )
 
 var (
 	connection *dbconn.DBConn
 	mock       sqlmock.Sqlmock
-	stdout     *gbytes.Buffer
-	stderr     *gbytes.Buffer
-	logfile    *gbytes.Buffer
 )
 
 func ExpectBegin(mock sqlmock.Sqlmock) {
@@ -38,7 +34,7 @@ func TestDBConn(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	connection, mock, stdout, stderr, logfile = testhelper.SetupTestEnvironment()
+	testhelper.SetupTestEnvironment()
 })
 
 var _ = BeforeEach(func() {

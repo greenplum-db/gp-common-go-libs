@@ -21,9 +21,9 @@ import (
 /*
  * While the sqlx.DB struct (and indirectly the sql.DB struct) maintains its own
  * connection pool, there is no guarantee of session-level consistency between
- * queries and we require that level of control for e.g. setting certain GUCs on
- * each connection before restoring data.  Also, while sql.Conn is a struct that
- * represents a single session, there is no sqlx.Conn equivalent we could use.
+ * queries and we require that level of control in some cases.  Also, while
+ * sql.Conn is a struct that represents a single session, there is no
+ * sqlx.Conn equivalent we could use.
  *
  * Thus, DBConn maintains its own connection pool of sqlx.DBs (all set to have
  * exactly one database connection each) in an array, such that callers can
