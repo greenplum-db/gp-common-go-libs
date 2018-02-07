@@ -5,6 +5,7 @@ package testhelper
  */
 
 import (
+	"github.com/greenplum-db/gp-common-go-libs/cluster"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -32,4 +33,31 @@ func (result TestResult) LastInsertId() (int64, error) {
 
 func (result TestResult) RowsAffected() (int64, error) {
 	return result.Rows, nil
+}
+
+type TestExecutor struct {
+	LocalError      error
+	LocalCommands   []string
+	ClusterOutput   *cluster.RemoteOutput
+	ClusterCommands []map[int][]string
+	ErrorOnExecNum  int // Throw the specified error after this many executions of Execute[...]Command(); 0 means always return error
+	NumExecutions   int
+}
+
+func (executor *TestExecutor) ExecuteLocalCommand(commandStr string) (string, error) {
+	executor.NumExecutions++
+	executor.LocalCommands = append(executor.LocalCommands, commandStr)
+	if executor.ErrorOnExecNum == 0 || executor.NumExecutions == executor.ErrorOnExecNum {
+		return "", executor.LocalError
+	}
+	return "", nil
+}
+
+func (executor *TestExecutor) ExecuteClusterCommand(commandMap map[int][]string) *cluster.RemoteOutput {
+	executor.NumExecutions++
+	executor.ClusterCommands = append(executor.ClusterCommands, commandMap)
+	if executor.ErrorOnExecNum == 0 || executor.NumExecutions == executor.ErrorOnExecNum {
+		return executor.ClusterOutput
+	}
+	return nil
 }
