@@ -11,7 +11,6 @@ import (
 
 	"github.com/greenplum-db/gp-common-go-libs/cluster"
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 
@@ -28,7 +27,6 @@ func TestCluster(t *testing.T) {
 var (
 	connection *dbconn.DBConn
 	mock       sqlmock.Sqlmock
-	logger     *gplog.Logger
 	stdout     *gbytes.Buffer
 	stderr     *gbytes.Buffer
 	logfile    *gbytes.Buffer
@@ -41,8 +39,7 @@ func expectPathToExist(path string) {
 }
 
 var _ = BeforeSuite(func() {
-	connection, mock, logger, stdout, stderr, logfile = testhelper.SetupTestEnvironment()
-	cluster.SetLogger(logger)
+	connection, mock, stdout, stderr, logfile = testhelper.SetupTestEnvironment()
 })
 
 var _ = BeforeEach(func() {

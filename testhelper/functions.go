@@ -20,20 +20,20 @@ import (
  * Functions for setting up the test environment and mocking out variables
  */
 
-func SetupTestLogger() (*gplog.Logger, *gbytes.Buffer, *gbytes.Buffer, *gbytes.Buffer) {
+func SetupTestLogger() (*gbytes.Buffer, *gbytes.Buffer, *gbytes.Buffer) {
 	testStdout := gbytes.NewBuffer()
 	testStderr := gbytes.NewBuffer()
 	testLogfile := gbytes.NewBuffer()
 	testLogger := gplog.NewLogger(testStdout, testStderr, testLogfile, "gbytes.Buffer", gplog.LOGINFO, "testProgram")
 	gplog.SetLogger(testLogger)
-	return testLogger, testStdout, testStderr, testLogfile
+	return testStdout, testStderr, testLogfile
 }
 
-func SetupTestEnvironment() (*dbconn.DBConn, sqlmock.Sqlmock, *gplog.Logger, *gbytes.Buffer, *gbytes.Buffer, *gbytes.Buffer) {
-	testLogger, testStdout, testStderr, testLogfile := SetupTestLogger()
+func SetupTestEnvironment() (*dbconn.DBConn, sqlmock.Sqlmock, *gbytes.Buffer, *gbytes.Buffer, *gbytes.Buffer) {
+	testStdout, testStderr, testLogfile := SetupTestLogger()
 	connection, mock := CreateAndConnectMockDB(1)
 	operating.System = operating.InitializeSystemFunctions()
-	return connection, mock, testLogger, testStdout, testStderr, testLogfile
+	return connection, mock, testStdout, testStderr, testLogfile
 }
 
 func CreateMockDB() (*sqlx.DB, sqlmock.Sqlmock) {
