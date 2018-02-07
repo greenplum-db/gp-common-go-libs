@@ -17,14 +17,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	logger *gplog.Logger
-)
-
-func SetLogger(log *gplog.Logger) {
-	logger = log
-}
-
 type Executor interface {
 	ExecuteLocalCommand(commandStr string) (string, error)
 	ExecuteClusterCommand(commandMap map[int][]string) *RemoteOutput
@@ -150,7 +142,7 @@ func (executor *GPDBExecutor) ExecuteClusterCommand(commandMap map[int][]string)
  * to simplify execution of shell commands on remote hosts.
  */
 func (cluster *Cluster) GenerateAndExecuteCommand(verboseMsg string, execFunc func(contentID int) string, entireCluster ...bool) *RemoteOutput {
-	// logger.Verbose(verboseMsg) FIXME: use singleton logger
+	gplog.Verbose(verboseMsg)
 	var commandMap map[int][]string
 	if len(entireCluster) == 1 && entireCluster[0] == true {
 		commandMap = cluster.GenerateSSHCommandMapForCluster(execFunc)
@@ -166,11 +158,11 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 	}
 	for contentID, err := range remoteOutput.Errors {
 		if err != nil {
-			logger.Verbose("%s on segment %d on host %s with error %s", messageFunc(contentID), contentID, cluster.GetHostForContent(contentID), err)
+			gplog.Verbose("%s on segment %d on host %s with error %s", messageFunc(contentID), contentID, cluster.GetHostForContent(contentID), err)
 		}
 	}
 	if len(noFatal) == 1 && noFatal[0] == true {
-		logger.Error(finalErrMsg)
+		gplog.Error(finalErrMsg)
 	} else {
 		LogFatalClusterError(finalErrMsg, remoteOutput.NumErrors)
 	}
@@ -181,7 +173,7 @@ func LogFatalClusterError(errMessage string, numErrors int) {
 	if numErrors != 1 {
 		s = "s"
 	}
-	logger.Fatal(errors.Errorf("%s on %d segment%s. See %s for a complete list of segments with errors.", errMessage, numErrors, s, logger.GetLogFilePath()), "")
+	gplog.Fatal(errors.Errorf("%s on %d segment%s. See %s for a complete list of segments with errors.", errMessage, numErrors, s, gplog.GetLogFilePath()), "")
 }
 
 /*
@@ -226,7 +218,7 @@ ORDER BY content;`
 
 	results := make([]SegConfig, 0)
 	err := connection.Select(&results, query)
-	logger.FatalOnError(err)
+	gplog.FatalOnError(err)
 	return results
 }
 

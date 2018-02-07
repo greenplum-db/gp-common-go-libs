@@ -1,19 +1,12 @@
 package dbconn_test
 
 import (
-	"testing"
-
 	"github.com/blang/semver"
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
-
-func TestVersion(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "dbconn tests")
-}
 
 var _ = Describe("dbconn/version tests", func() {
 	fake43 := dbconn.GPDBVersion{VersionString: "4.3.0.0", SemVer: semver.MustParse("4.3.0")}

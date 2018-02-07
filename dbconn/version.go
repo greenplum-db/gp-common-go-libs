@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/blang/semver"
+	"github.com/greenplum-db/gp-common-go-libs/gplog"
 )
 
 type GPDBVersion struct {
@@ -14,7 +15,7 @@ type GPDBVersion struct {
 
 func (dbversion *GPDBVersion) Initialize(dbconn *DBConn) {
 	err := dbconn.Get(dbversion, "SELECT version() AS versionstring")
-	logger.FatalOnError(err)
+	gplog.FatalOnError(err)
 	versionStart := strings.Index(dbversion.VersionString, "(Greenplum Database ") + len("(Greenplum Database ")
 	versionEnd := strings.Index(dbversion.VersionString, ")")
 	dbversion.VersionString = dbversion.VersionString[versionStart:versionEnd]
@@ -22,7 +23,7 @@ func (dbversion *GPDBVersion) Initialize(dbconn *DBConn) {
 	pattern := regexp.MustCompile(`\d+\.\d+\.\d+`)
 	threeDigitVersion := pattern.FindStringSubmatch(dbversion.VersionString)[0]
 	dbversion.SemVer, err = semver.Make(threeDigitVersion)
-	logger.FatalOnError(err)
+	gplog.FatalOnError(err)
 }
 
 func StringToSemVerRange(versionStr string) semver.Range {

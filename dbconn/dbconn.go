@@ -18,14 +18,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	logger *gplog.Logger
-)
-
-func SetLogger(log *gplog.Logger) {
-	logger = log
-}
-
 /*
  * While the sqlx.DB struct (and indirectly the sql.DB struct) maintains its own
  * connection pool, there is no guarantee of session-level consistency between
@@ -75,7 +67,7 @@ func (driver GPDBDriver) Connect(driverName string, dataSourceName string) (*sql
 
 func NewDBConn(dbname string) *DBConn {
 	if dbname == "" {
-		logger.Fatal(errors.New("No database provided"), "")
+		gplog.Fatal(errors.New("No database provided"), "")
 	}
 
 	username := operating.System.Getenv("PGUSER")
@@ -119,7 +111,7 @@ func NewDBConn(dbname string) *DBConn {
  */
 func (dbconn *DBConn) MustBegin() {
 	err := dbconn.Begin()
-	logger.FatalOnError(err)
+	gplog.FatalOnError(err)
 }
 
 func (dbconn *DBConn) Begin() error {
@@ -152,7 +144,7 @@ func (dbconn *DBConn) Close() {
 
 func (dbconn *DBConn) MustCommit() {
 	err := dbconn.Commit()
-	logger.FatalOnError(err)
+	gplog.FatalOnError(err)
 }
 
 func (dbconn *DBConn) Commit() error {
@@ -166,7 +158,7 @@ func (dbconn *DBConn) Commit() error {
 
 func (dbconn *DBConn) MustConnect(numConns int) {
 	err := dbconn.Connect(numConns)
-	logger.FatalOnError(err)
+	gplog.FatalOnError(err)
 }
 
 func (dbconn *DBConn) Connect(numConns int) error {
@@ -228,7 +220,7 @@ func (dbconn *DBConn) Exec(query string, whichConn ...int) (sql.Result, error) {
 
 func (dbconn *DBConn) MustExec(query string, whichConn ...int) {
 	_, err := dbconn.Exec(query, whichConn...)
-	logger.FatalOnError(err)
+	gplog.FatalOnError(err)
 }
 
 func (dbconn *DBConn) Get(destination interface{}, query string, whichConn ...int) error {
@@ -256,10 +248,10 @@ func (dbconn *DBConn) ValidateConnNum(whichConn ...int) int {
 		return 0
 	}
 	if len(whichConn) != 1 {
-		logger.Fatal(errors.Errorf("At most one connection number may be specified for a given connection"), "")
+		gplog.Fatal(errors.Errorf("At most one connection number may be specified for a given connection"), "")
 	}
 	if whichConn[0] < 0 || whichConn[0] >= dbconn.NumConns {
-		logger.Fatal(errors.Errorf("Invalid connection number: %d", whichConn[0]), "")
+		gplog.Fatal(errors.Errorf("Invalid connection number: %d", whichConn[0]), "")
 	}
 	return whichConn[0]
 }
@@ -281,7 +273,7 @@ func EscapeConnectionParam(param string) string {
  */
 func MustSelectString(connection *DBConn, query string, whichConn ...int) string {
 	str, err := SelectString(connection, query, whichConn...)
-	logger.FatalOnError(err)
+	gplog.FatalOnError(err)
 	return str
 }
 
@@ -303,7 +295,7 @@ func SelectString(connection *DBConn, query string, whichConn ...int) (string, e
 // This is a convenience function for Select() when we're selecting single strings.
 func MustSelectStringSlice(connection *DBConn, query string, whichConn ...int) []string {
 	str, err := SelectStringSlice(connection, query, whichConn...)
-	logger.FatalOnError(err)
+	gplog.FatalOnError(err)
 	return str
 }
 

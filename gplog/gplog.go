@@ -23,7 +23,7 @@ var (
 	 */
 	errorCode = 0
 	// Singleton logger used by any package or utility that calls InitializeLogging
-	logger *Logger
+	logger *GpLogger
 )
 
 const (
@@ -61,7 +61,7 @@ const (
  *          the error message.
  */
 
-type Logger struct {
+type GpLogger struct {
 	logStdout   *log.Logger
 	logStderr   *log.Logger
 	logFile     *log.Logger
@@ -79,9 +79,9 @@ type Logger struct {
  * will initialize the logger as a singleton and subsequent calls will return
  * the same Logger instance.
  */
-func InitializeLogging(program string, logdir string) *Logger {
+func InitializeLogging(program string, logdir string) {
 	if logger != nil {
-		return logger
+		return
 	}
 	currentUser, _ := operating.System.CurrentUser()
 	if logdir == "" {
@@ -94,12 +94,20 @@ func InitializeLogging(program string, logdir string) *Logger {
 	logFileHandle := openLogFile(logfile)
 
 	logger = NewLogger(os.Stdout, os.Stderr, logFileHandle, logfile, LOGINFO, program)
+}
+
+func SetLogger(log *GpLogger) {
+	logger = log
+}
+
+// This function should only be used for testing purposes
+func GetLogger() *GpLogger {
 	return logger
 }
 
 // stdout and stderr are passed in to this function to enable output redirection in tests.
-func NewLogger(stdout io.Writer, stderr io.Writer, logFile io.Writer, logFileName string, verbosity int, program string) *Logger {
-	return &Logger{
+func NewLogger(stdout io.Writer, stderr io.Writer, logFile io.Writer, logFileName string, verbosity int, program string) *GpLogger {
+	return &GpLogger{
 		logStdout:   log.New(stdout, "", 0),
 		logStderr:   log.New(stderr, "", 0),
 		logFile:     log.New(logFile, "", 0),
@@ -107,14 +115,6 @@ func NewLogger(stdout io.Writer, stderr io.Writer, logFile io.Writer, logFileNam
 		verbosity:   verbosity,
 		header:      getHeader(program),
 	}
-}
-
-func GetLogger() *Logger {
-	return logger
-}
-
-func SetLogger(log *Logger) {
-	logger = log
 }
 
 func getHeader(program string) string {
@@ -128,20 +128,20 @@ func getHeader(program string) string {
 
 }
 
-func (logger *Logger) GetLogPrefix(level string) string {
+func GetLogPrefix(level string) string {
 	logTimestamp := operating.System.Now().Format("20060102:15:04:05")
 	return fmt.Sprintf("%s %s", logTimestamp, fmt.Sprintf(logger.header, level))
 }
 
-func (logger *Logger) GetLogFilePath() string {
+func GetLogFilePath() string {
 	return logger.logFileName
 }
 
-func (logger *Logger) GetVerbosity() int {
+func GetVerbosity() int {
 	return logger.verbosity
 }
 
-func (logger *Logger) SetVerbosity(verbosity int) {
+func SetVerbosity(verbosity int) {
 	logger.verbosity = verbosity
 }
 
@@ -153,45 +153,45 @@ func GetErrorCode() int {
  * Log output functions, as described above
  */
 
-func (logger *Logger) Info(s string, v ...interface{}) {
-	message := logger.GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
+func Info(s string, v ...interface{}) {
+	message := GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
 	logger.logFile.Output(1, message)
 	if logger.verbosity >= LOGINFO {
 		logger.logStdout.Output(1, message)
 	}
 }
 
-func (logger *Logger) Warn(s string, v ...interface{}) {
-	message := logger.GetLogPrefix("WARNING") + fmt.Sprintf(s, v...)
+func Warn(s string, v ...interface{}) {
+	message := GetLogPrefix("WARNING") + fmt.Sprintf(s, v...)
 	logger.logFile.Output(1, message)
 	logger.logStdout.Output(1, message)
 }
 
-func (logger *Logger) Verbose(s string, v ...interface{}) {
-	message := logger.GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
+func Verbose(s string, v ...interface{}) {
+	message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
 	logger.logFile.Output(1, message)
 	if logger.verbosity >= LOGVERBOSE {
 		logger.logStdout.Output(1, message)
 	}
 }
 
-func (logger *Logger) Debug(s string, v ...interface{}) {
-	message := logger.GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
+func Debug(s string, v ...interface{}) {
+	message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
 	logger.logFile.Output(1, message)
 	if logger.verbosity >= LOGDEBUG {
 		logger.logStdout.Output(1, message)
 	}
 }
 
-func (logger *Logger) Error(s string, v ...interface{}) {
-	message := logger.GetLogPrefix("ERROR") + fmt.Sprintf(s, v...)
+func Error(s string, v ...interface{}) {
+	message := GetLogPrefix("ERROR") + fmt.Sprintf(s, v...)
 	errorCode = 1
 	logger.logFile.Output(1, message)
 	logger.logStderr.Output(1, message)
 }
 
-func (logger *Logger) Fatal(err error, s string, v ...interface{}) {
-	message := logger.GetLogPrefix("CRITICAL") + fmt.Sprintf(s, v...)
+func Fatal(err error, s string, v ...interface{}) {
+	message := GetLogPrefix("CRITICAL") + fmt.Sprintf(s, v...)
 	errorCode = 2
 	stackTraceStr := ""
 	if err != nil {
@@ -209,9 +209,9 @@ func (logger *Logger) Fatal(err error, s string, v ...interface{}) {
 	}
 }
 
-func (logger *Logger) FatalOnError(err error) {
+func FatalOnError(err error) {
 	if err != nil {
-		logger.Fatal(err, "")
+		Fatal(err, "")
 	}
 }
 
