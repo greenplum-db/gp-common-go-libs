@@ -149,6 +149,10 @@ func GetErrorCode() int {
 	return errorCode
 }
 
+func SetErrorCode(code int) {
+	errorCode = code
+}
+
 /*
  * Log output functions, as described above
  */
