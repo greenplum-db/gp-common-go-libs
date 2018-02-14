@@ -46,7 +46,7 @@ const (
  *
  * The intended usage of these functions is as follows:
  * - Info: Messages that should always be written unless the user explicitly
- *         suppresses output
+ *         suppresses output, e.g. notifying the user that a step has completed.
  * - Verbose: More detailed messages that are mostly useful to the user, e.g.
  *            printing information about a function's substeps for progress tracking.
  * - Debug: More detailed messages that are mostly useful to developers, e.g.
@@ -55,7 +55,7 @@ const (
  *         may want to know, e.g. that certain steps are skipped when using
  *         certain flags.  These messages are shown even if output is suppressed.
  * - Error: Messages indicating that an error has occurred, but that the program
- *          can continue, e.g. one table failed to back up but others succeeded.
+ *          can continue, e.g. one function call in a group failed but others succeeded.
  * - Fatal: Messages indicating that the program cannot proceed, e.g. the database
  *          cannot be reached.  This function will exit the program after printing
  *          the error message.
@@ -231,8 +231,7 @@ func formatStackTrace(err error) string {
 
 /*
  * Abort() is for handling critical errors.  It panic()s to unwind the call stack
- * until the panic is caught by the recover() in DoTeardown(), at
- * which point any necessary cleanup is performed.
+ * assuming that the panic is caught by a recover() in the main utility.
  *
  * log.Fatal() calls Abort() after logging its arguments, so generally that function
  * should be used instead of calling Abort() directly.
