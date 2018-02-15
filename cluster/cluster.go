@@ -157,7 +157,7 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 	}
 	for contentID, err := range remoteOutput.Errors {
 		if err != nil {
-			gplog.Verbose("%s on segment %d on host %s with error %s", messageFunc(contentID), contentID, cluster.GetHostForContent(contentID), err)
+			gplog.Verbose("%s on segment %d on host %s with error %s: %s", messageFunc(contentID), contentID, cluster.GetHostForContent(contentID), err, remoteOutput.Stderrs[contentID])
 		}
 	}
 	if len(noFatal) == 1 && noFatal[0] == true {
