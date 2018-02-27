@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/greenplum-db/gp-common-go-libs/operating"
 	"github.com/pkg/errors"
@@ -24,6 +25,16 @@ var (
 	errorCode = 0
 	// Singleton logger used by any package or utility that calls InitializeLogging
 	logger *GpLogger
+	/*
+	 * A mutex for ensuring that concurrent calls to output functions by multiple
+	 * goroutines are safe.
+	 *
+	 * This mutex is a package-level global rather than a member of GpLogger to
+	 * avoid any possible error condition caused by calling SetLogger in one
+	 * goroutine while another is calling an output function, which could possibly
+	 * arise while running tests in parallel.
+	 */
+	logMutex sync.Mutex
 )
 
 const (
@@ -158,6 +169,8 @@ func SetErrorCode(code int) {
  */
 
 func Info(s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
 	message := GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
 	logger.logFile.Output(1, message)
 	if logger.verbosity >= LOGINFO {
@@ -166,12 +179,16 @@ func Info(s string, v ...interface{}) {
 }
 
 func Warn(s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
 	message := GetLogPrefix("WARNING") + fmt.Sprintf(s, v...)
 	logger.logFile.Output(1, message)
 	logger.logStdout.Output(1, message)
 }
 
 func Verbose(s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
 	message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
 	logger.logFile.Output(1, message)
 	if logger.verbosity >= LOGVERBOSE {
@@ -180,6 +197,8 @@ func Verbose(s string, v ...interface{}) {
 }
 
 func Debug(s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
 	message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
 	logger.logFile.Output(1, message)
 	if logger.verbosity >= LOGDEBUG {
@@ -188,6 +207,8 @@ func Debug(s string, v ...interface{}) {
 }
 
 func Error(s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
 	message := GetLogPrefix("ERROR") + fmt.Sprintf(s, v...)
 	errorCode = 1
 	logger.logFile.Output(1, message)
@@ -195,6 +216,8 @@ func Error(s string, v ...interface{}) {
 }
 
 func Fatal(err error, s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
 	message := GetLogPrefix("CRITICAL") + fmt.Sprintf(s, v...)
 	errorCode = 2
 	stackTraceStr := ""
