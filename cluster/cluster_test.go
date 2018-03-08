@@ -20,7 +20,7 @@ import (
 
 func TestCluster(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "dbconn tests")
+	RunSpecs(t, "cluster tests")
 }
 
 var (

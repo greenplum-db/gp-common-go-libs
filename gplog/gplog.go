@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/greenplum-db/gp-common-go-libs/operating"
@@ -218,16 +219,17 @@ func Error(s string, v ...interface{}) {
 func Fatal(err error, s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	message := GetLogPrefix("CRITICAL") + fmt.Sprintf(s, v...)
+	message := GetLogPrefix("CRITICAL")
 	errorCode = 2
 	stackTraceStr := ""
 	if err != nil {
+		message += fmt.Sprintf("%v", err)
+		stackTraceStr = formatStackTrace(errors.WithStack(err))
 		if s != "" {
 			message += ": "
 		}
-		message += fmt.Sprintf("%v", err)
-		stackTraceStr = formatStackTrace(errors.WithStack(err))
 	}
+	message += strings.TrimSpace(fmt.Sprintf(s, v...))
 	logger.logFile.Output(1, message+stackTraceStr)
 	if logger.verbosity >= LOGVERBOSE {
 		abort(message + stackTraceStr)
@@ -236,9 +238,13 @@ func Fatal(err error, s string, v ...interface{}) {
 	}
 }
 
-func FatalOnError(err error) {
+func FatalOnError(err error, output ...string) {
 	if err != nil {
-		Fatal(err, "")
+		if len(output) == 0 {
+			Fatal(err, "")
+		} else {
+			Fatal(err, output[0])
+		}
 	}
 }
 

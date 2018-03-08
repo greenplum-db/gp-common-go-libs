@@ -129,6 +129,19 @@ var _ = Describe("logger/log tests", func() {
 		errorExpected := fmt.Sprintf(patternExpected, "ERROR")
 		fatalExpected := fmt.Sprintf(patternExpected, "CRITICAL")
 
+		Describe("FatalOnError", func() {
+			It("Does not panic when err is nil", func() {
+				gplog.FatalOnError(nil, "")
+			})
+			It("Logs fatally on error with no output", func() {
+				defer testhelper.ShouldPanicWithMessage("this is an error")
+				gplog.FatalOnError(errors.New("this is an error"))
+			})
+			It("Logs fatally on error with output", func() {
+				defer testhelper.ShouldPanicWithMessage("this is an error: this is output")
+				gplog.FatalOnError(errors.New("this is an error"), "this is output")
+			})
+		})
 		Describe("Verbosity set to Error", func() {
 			BeforeEach(func() {
 				gplog.SetVerbosity(gplog.LOGERROR)
