@@ -13,9 +13,11 @@ import (
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
+	"github.com/pkg/errors"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
 func TestCluster(t *testing.T) {
@@ -26,6 +28,7 @@ func TestCluster(t *testing.T) {
 var (
 	connection *dbconn.DBConn
 	mock       sqlmock.Sqlmock
+	logfile    *gbytes.Buffer
 )
 
 func expectPathToExist(path string) {
@@ -35,7 +38,7 @@ func expectPathToExist(path string) {
 }
 
 var _ = BeforeSuite(func() {
-	testhelper.SetupTestEnvironment()
+	_, _, _, _, logfile = testhelper.SetupTestEnvironment()
 })
 
 var _ = BeforeEach(func() {
@@ -102,10 +105,10 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(results[2].Hostname).To(Equal("remotehost"))
 		})
 	})
-	Describe("GenerateSSHCommandMap", func() {
+	Describe("GenerateSSHCommandMapForSegments", func() {
 		It("Returns a map of ssh commands for the master, including master", func() {
 			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg})
-			commandMap := testCluster.GenerateSSHCommandMap(true, func(_ int) string {
+			commandMap := testCluster.GenerateSSHCommandMapForSegments(true, func(_ int) string {
 				return "ls"
 			})
 			Expect(len(commandMap)).To(Equal(1))
@@ -113,14 +116,14 @@ var _ = Describe("cluster/cluster tests", func() {
 		})
 		It("Returns a map of ssh commands for the master, excluding master", func() {
 			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg})
-			commandMap := testCluster.GenerateSSHCommandMap(false, func(_ int) string {
+			commandMap := testCluster.GenerateSSHCommandMapForSegments(false, func(_ int) string {
 				return "ls"
 			})
 			Expect(len(commandMap)).To(Equal(0))
 		})
 		It("Returns a map of ssh commands for one segment, including master", func() {
 			testCluster := cluster.NewCluster([]cluster.SegConfig{remoteSegOne})
-			commandMap := testCluster.GenerateSSHCommandMap(true, func(_ int) string {
+			commandMap := testCluster.GenerateSSHCommandMapForSegments(true, func(_ int) string {
 				return "ls"
 			})
 			Expect(len(commandMap)).To(Equal(1))
@@ -128,7 +131,7 @@ var _ = Describe("cluster/cluster tests", func() {
 		})
 		It("Returns a map of ssh commands for one segment, excluding master", func() {
 			testCluster := cluster.NewCluster([]cluster.SegConfig{remoteSegOne})
-			commandMap := testCluster.GenerateSSHCommandMap(false, func(_ int) string {
+			commandMap := testCluster.GenerateSSHCommandMapForSegments(false, func(_ int) string {
 				return "ls"
 			})
 			Expect(len(commandMap)).To(Equal(1))
@@ -136,7 +139,7 @@ var _ = Describe("cluster/cluster tests", func() {
 		})
 		It("Returns a map of ssh commands for two segments on the same host, including master", func() {
 			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne})
-			commandMap := testCluster.GenerateSSHCommandMap(true, func(_ int) string {
+			commandMap := testCluster.GenerateSSHCommandMapForSegments(true, func(_ int) string {
 				return "ls"
 			})
 			Expect(len(commandMap)).To(Equal(2))
@@ -145,7 +148,7 @@ var _ = Describe("cluster/cluster tests", func() {
 		})
 		It("Returns a map of ssh commands for two segments on the same host, excluding master", func() {
 			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne})
-			commandMap := testCluster.GenerateSSHCommandMap(false, func(_ int) string {
+			commandMap := testCluster.GenerateSSHCommandMapForSegments(false, func(_ int) string {
 				return "ls"
 			})
 			Expect(len(commandMap)).To(Equal(1))
@@ -153,7 +156,7 @@ var _ = Describe("cluster/cluster tests", func() {
 		})
 		It("Returns a map of ssh commands for three segments on different hosts", func() {
 			testCluster := cluster.NewCluster([]cluster.SegConfig{localSegOne, remoteSegOne, remoteSegTwo})
-			commandMap := testCluster.GenerateSSHCommandMap(false, func(contentID int) string {
+			commandMap := testCluster.GenerateSSHCommandMapForSegments(false, func(contentID int) string {
 				return fmt.Sprintf("echo %d", contentID)
 			})
 			Expect(len(commandMap)).To(Equal(3))
@@ -162,25 +165,83 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(commandMap[2]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 2"}))
 		})
 	})
-	Describe("GenerateSSHCommandMapForCluster", func() {
-		It("includes master in the command map", func() {
-			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne})
-			commandMap := testCluster.GenerateSSHCommandMapForCluster(func(_ int) string {
+	Describe("GenerateSSHCommandMapForHosts", func() {
+		It("Returns a map of ssh commands for the master host, including the master host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg})
+			commandMap := testCluster.GenerateSSHCommandMapForHosts(true, func(_ int) string {
 				return "ls"
 			})
-			Expect(len(commandMap)).To(Equal(2))
+			Expect(len(commandMap)).To(Equal(1))
 			Expect(commandMap[-1]).To(Equal([]string{"bash", "-c", "ls"}))
-			Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "ls"}))
 		})
-	})
-	Describe("GenerateSSHCommandMapForSegments", func() {
-		It("excludes master from the command map", func() {
+		It("Returns a map of ssh commands for the master host, excluding the master host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg})
+			commandMap := testCluster.GenerateSSHCommandMapForHosts(false, func(_ int) string {
+				return "ls"
+			})
+			Expect(len(commandMap)).To(Equal(0))
+		})
+		It("Returns a map of ssh commands for one host, including the master host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{remoteSegOne})
+			commandMap := testCluster.GenerateSSHCommandMapForHosts(true, func(_ int) string {
+				return "ls"
+			})
+			Expect(len(commandMap)).To(Equal(1))
+			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "ls"}))
+		})
+		It("Returns a map of ssh commands for one host, excluding the master host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{remoteSegOne})
+			commandMap := testCluster.GenerateSSHCommandMapForHosts(false, func(_ int) string {
+				return "ls"
+			})
+			Expect(len(commandMap)).To(Equal(1))
+			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "ls"}))
+		})
+		It("Returns a map of ssh commands for one host containing two segments, including the master host", func() {
 			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne})
-			commandMap := testCluster.GenerateSSHCommandMapForSegments(func(_ int) string {
+			commandMap := testCluster.GenerateSSHCommandMapForHosts(true, func(_ int) string {
+				return "ls"
+			})
+			Expect(len(commandMap)).To(Equal(1))
+			// Either -1 or 0 will be present, but which content isn't guaranteed since we only really care about the host
+			if _, ok := commandMap[-1]; ok {
+				Expect(commandMap[-1]).To(Equal([]string{"bash", "-c", "ls"}))
+			} else {
+				Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "ls"}))
+			}
+		})
+		It("Returns a map of ssh commands for one host containing two segments, excluding the master host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne})
+			commandMap := testCluster.GenerateSSHCommandMapForHosts(false, func(_ int) string {
 				return "ls"
 			})
 			Expect(len(commandMap)).To(Equal(1))
 			Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "ls"}))
+		})
+		It("Returns a map of ssh commands for one master host and two remote hosts, including the master host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, remoteSegOne, remoteSegTwo})
+			commandMap := testCluster.GenerateSSHCommandMapForHosts(true, func(contentID int) string {
+				return fmt.Sprintf("echo %d", contentID)
+			})
+			Expect(len(commandMap)).To(Equal(3))
+			// Either -1 or 0 will be present, but which content isn't guaranteed since we only really care about the host
+			if _, ok := commandMap[-1]; ok {
+				Expect(commandMap[-1]).To(Equal([]string{"bash", "-c", "echo -1"}))
+			} else {
+				Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "echo 0"}))
+			}
+			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "echo 1"}))
+			Expect(commandMap[2]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 2"}))
+		})
+		It("Returns a map of ssh commands for one master host and two remote hosts, excluding the master host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, remoteSegOne, remoteSegTwo})
+			commandMap := testCluster.GenerateSSHCommandMapForHosts(false, func(contentID int) string {
+				return fmt.Sprintf("echo %d", contentID)
+			})
+			Expect(len(commandMap)).To(Equal(3))
+			Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "echo 0"}))
+			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "echo 1"}))
+			Expect(commandMap[2]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 2"}))
 		})
 	})
 	Describe("ExecuteLocalCommand", func() {
@@ -222,7 +283,7 @@ var _ = Describe("cluster/cluster tests", func() {
 				0:  {"touch", "/tmp/gp_common_go_libs_test/baz"},
 			}
 			testCluster.Executor = &cluster.GPDBExecutor{}
-			testCluster.ExecuteClusterCommand(commandMap)
+			testCluster.ExecuteClusterCommand(cluster.ON_SEGMENTS_AND_MASTER, commandMap)
 
 			expectPathToExist("/tmp/gp_common_go_libs_test/foo")
 			expectPathToExist("/tmp/gp_common_go_libs_test/baz")
@@ -234,21 +295,57 @@ var _ = Describe("cluster/cluster tests", func() {
 				0:  {"some-non-existent-command"},
 			}
 			testCluster.Executor = &cluster.GPDBExecutor{}
-			clusterOutput := testCluster.ExecuteClusterCommand(commandMap)
+			clusterOutput := testCluster.ExecuteClusterCommand(cluster.ON_SEGMENTS_AND_MASTER, commandMap)
 
 			expectPathToExist("/tmp/gp_common_go_libs_test/foo")
 			Expect(clusterOutput.NumErrors).To(Equal(1))
 			Expect(clusterOutput.Errors[0].Error()).To(Equal("exec: \"some-non-existent-command\": executable file not found in $PATH"))
 		})
 	})
+	Describe("CheckClusterError", func() {
+		It("prints error messages for a command executed on a per-segment basis", func() {
+			remoteOutput := &cluster.RemoteOutput{
+				Scope:     cluster.ON_SEGMENTS,
+				NumErrors: 1,
+				Stderrs: map[int]string{
+					1: "exit status 1",
+				},
+				Errors: map[int]error{
+					1: errors.Errorf("ssh error"),
+				},
+			}
+			defer testhelper.ShouldPanicWithMessage("Got an error on 1 segment. See gbytes.Buffer for a complete list of errors.")
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error received on segment 1 on host remotehost1 with error ssh error: exit status 1`))
+			testCluster.CheckClusterError(remoteOutput, "Got an error", func(contentID int) string {
+				return "Error received"
+			})
+		})
+		It("prints error messages for a command executed on a per-host basis", func() {
+			remoteOutput := &cluster.RemoteOutput{
+				Scope:     cluster.ON_HOSTS,
+				NumErrors: 1,
+				Stderrs: map[int]string{
+					1: "exit status 1",
+				},
+				Errors: map[int]error{
+					1: errors.Errorf("ssh error"),
+				},
+			}
+			defer testhelper.ShouldPanicWithMessage("Got an error on 1 host. See gbytes.Buffer for a complete list of errors.")
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error received on host remotehost1 with error ssh error: exit status 1`))
+			testCluster.CheckClusterError(remoteOutput, "Got an error", func(contentID int) string {
+				return "Error received"
+			})
+		})
+	})
 	Describe("LogFatalClusterError", func() {
 		It("logs an error for 1 segment", func() {
-			defer testhelper.ShouldPanicWithMessage("Error occurred on 1 segment. See gbytes.Buffer for a complete list of segments with errors.")
-			cluster.LogFatalClusterError("Error occurred", 1)
+			defer testhelper.ShouldPanicWithMessage("Error occurred on 1 segment. See gbytes.Buffer for a complete list of errors.")
+			cluster.LogFatalClusterError("Error occurred", cluster.ON_SEGMENTS_AND_MASTER, 1)
 		})
 		It("logs an error for more than 1 segment", func() {
-			defer testhelper.ShouldPanicWithMessage("Error occurred on 2 segments. See gbytes.Buffer for a complete list of segments with errors.")
-			cluster.LogFatalClusterError("Error occurred", 2)
+			defer testhelper.ShouldPanicWithMessage("Error occurred on 2 segments. See gbytes.Buffer for a complete list of errors.")
+			cluster.LogFatalClusterError("Error occurred", cluster.ON_SEGMENTS_AND_MASTER, 2)
 		})
 	})
 	Describe("cluster setup and accessor functions", func() {
