@@ -53,7 +53,7 @@ func (executor *TestExecutor) ExecuteLocalCommand(commandStr string) (string, er
 	return "", nil
 }
 
-func (executor *TestExecutor) ExecuteClusterCommand(commandMap map[int][]string) *cluster.RemoteOutput {
+func (executor *TestExecutor) ExecuteClusterCommand(scope int, commandMap map[int][]string) *cluster.RemoteOutput {
 	executor.NumExecutions++
 	executor.ClusterCommands = append(executor.ClusterCommands, commandMap)
 	if executor.ErrorOnExecNum == 0 || executor.NumExecutions == executor.ErrorOnExecNum {
