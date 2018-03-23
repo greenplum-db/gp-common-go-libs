@@ -313,8 +313,12 @@ var _ = Describe("cluster/cluster tests", func() {
 				Errors: map[int]error{
 					1: errors.Errorf("ssh error"),
 				},
+				CmdStrs: map[int]string{
+					1: "this is the command",
+				},
 			}
 			defer testhelper.ShouldPanicWithMessage("Got an error on 1 segment. See gbytes.Buffer for a complete list of errors.")
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the command`))
 			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error received on segment 1 on host remotehost1 with error ssh error: exit status 1`))
 			testCluster.CheckClusterError(remoteOutput, "Got an error", func(contentID int) string {
 				return "Error received"

@@ -59,6 +59,7 @@ type RemoteOutput struct {
 	Stdouts   map[int]string
 	Stderrs   map[int]string
 	Errors    map[int]error
+	CmdStrs   map[int]string
 }
 
 /*
@@ -126,7 +127,8 @@ func newRemoteOutput(scope int, numIDs int) *RemoteOutput {
 	stdout := make(map[int]string, numIDs)
 	stderr := make(map[int]string, numIDs)
 	err := make(map[int]error, numIDs)
-	return &RemoteOutput{Scope: scope, NumErrors: 0, Stdouts: stdout, Stderrs: stderr, Errors: err}
+	cmdStr := make(map[int]string, numIDs)
+	return &RemoteOutput{Scope: scope, NumErrors: 0, Stdouts: stdout, Stderrs: stderr, Errors: err, CmdStrs: cmdStr}
 }
 
 func (executor *GPDBExecutor) ExecuteClusterCommand(scope int, commandMap map[int][]string) *RemoteOutput {
@@ -160,6 +162,7 @@ func (executor *GPDBExecutor) ExecuteClusterCommand(scope int, commandMap map[in
 		output.Stdouts[id] = stdouts[index]
 		output.Stderrs[id] = stderrs[index]
 		output.Errors[id] = errors[index]
+		output.CmdStrs[id] = strings.Join(commandMap[id], " ")
 		if output.Errors[id] != nil {
 			output.NumErrors++
 		}
@@ -203,6 +206,7 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 				segMsg = fmt.Sprintf("on segment %d ", contentID)
 			}
 			gplog.Verbose("%s %son host %s with error %s: %s", messageFunc(contentID), segMsg, cluster.GetHostForContent(contentID), err, remoteOutput.Stderrs[contentID])
+			gplog.Verbose("Command was: %s", remoteOutput.CmdStrs[contentID])
 		}
 	}
 	if len(noFatal) == 1 && noFatal[0] == true {
