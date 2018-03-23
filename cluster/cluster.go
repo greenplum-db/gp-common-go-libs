@@ -205,7 +205,8 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 			if remoteOutput.Scope != ON_HOSTS {
 				segMsg = fmt.Sprintf("on segment %d ", contentID)
 			}
-			gplog.Verbose("%s %son host %s with error %s: %s Command was: %s", messageFunc(contentID), segMsg, cluster.GetHostForContent(contentID), err, remoteOutput.Stderrs[contentID], remoteOutput.CmdStrs[contentID])
+			gplog.Verbose("%s %son host %s with error %s: %s", messageFunc(contentID), segMsg, cluster.GetHostForContent(contentID), err, remoteOutput.Stderrs[contentID])
+			gplog.Verbose("Command was: %s", remoteOutput.CmdStrs[contentID])
 		}
 	}
 	if len(noFatal) == 1 && noFatal[0] == true {
