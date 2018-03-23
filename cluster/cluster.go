@@ -202,7 +202,7 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 	for contentID, err := range remoteOutput.Errors {
 		if err != nil {
 			segMsg := ""
-			if remoteOutput.Scope != ON_HOSTS {
+			if remoteOutput.Scope != ON_HOSTS && remoteOutput.Scope != ON_HOSTS_AND_MASTER {
 				segMsg = fmt.Sprintf("on segment %d ", contentID)
 			}
 			gplog.Verbose("%s %son host %s with error %s: %s", messageFunc(contentID), segMsg, cluster.GetHostForContent(contentID), err, remoteOutput.Stderrs[contentID])
@@ -218,7 +218,7 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 
 func LogFatalClusterError(errMessage string, scope int, numErrors int) {
 	segMsg := "segment"
-	if scope == ON_HOSTS {
+	if scope == ON_HOSTS || scope == ON_HOSTS_AND_MASTER {
 		segMsg = "host"
 	}
 	if numErrors != 1 {

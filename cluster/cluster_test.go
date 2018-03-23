@@ -341,15 +341,40 @@ var _ = Describe("cluster/cluster tests", func() {
 				return "Error received"
 			})
 		})
+		It("prints error messages for a command executed on a per-host and master basis", func() {
+			remoteOutput := &cluster.RemoteOutput{
+				Scope:     cluster.ON_HOSTS_AND_MASTER,
+				NumErrors: 1,
+				Stderrs: map[int]string{
+					1: "exit status 1",
+				},
+				Errors: map[int]error{
+					1: errors.Errorf("ssh error"),
+				},
+			}
+			defer testhelper.ShouldPanicWithMessage("Got an error on 1 host. See gbytes.Buffer for a complete list of errors.")
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error received on host remotehost1 with error ssh error: exit status 1`))
+			testCluster.CheckClusterError(remoteOutput, "Got an error", func(contentID int) string {
+				return "Error received"
+			})
+		})
 	})
 	Describe("LogFatalClusterError", func() {
-		It("logs an error for 1 segment", func() {
+		It("logs an error for 1 segment (with master)", func() {
 			defer testhelper.ShouldPanicWithMessage("Error occurred on 1 segment. See gbytes.Buffer for a complete list of errors.")
 			cluster.LogFatalClusterError("Error occurred", cluster.ON_SEGMENTS_AND_MASTER, 1)
 		})
 		It("logs an error for more than 1 segment", func() {
 			defer testhelper.ShouldPanicWithMessage("Error occurred on 2 segments. See gbytes.Buffer for a complete list of errors.")
-			cluster.LogFatalClusterError("Error occurred", cluster.ON_SEGMENTS_AND_MASTER, 2)
+			cluster.LogFatalClusterError("Error occurred", cluster.ON_SEGMENTS, 2)
+		})
+		It("logs an error for 1 host", func() {
+			defer testhelper.ShouldPanicWithMessage("Error occurred on 1 host. See gbytes.Buffer for a complete list of errors.")
+			cluster.LogFatalClusterError("Error occurred", cluster.ON_HOSTS, 1)
+		})
+		It("logs an error for more than 1 host (with master)", func() {
+			defer testhelper.ShouldPanicWithMessage("Error occurred on 2 hosts. See gbytes.Buffer for a complete list of errors.")
+			cluster.LogFatalClusterError("Error occurred", cluster.ON_HOSTS_AND_MASTER, 2)
 		})
 	})
 	Describe("cluster setup and accessor functions", func() {
