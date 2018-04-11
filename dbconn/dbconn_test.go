@@ -75,12 +75,14 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			Expect(connection.DBName).To(Equal("testdb"))
 			Expect(connection.NumConns).To(Equal(1))
 			Expect(len(connection.ConnPool)).To(Equal(1))
+			Expect(len(connection.Tx)).To(Equal(1))
 		})
 		It("makes multiple connections successfully if the database exists", func() {
 			connection.MustConnect(3)
 			Expect(connection.DBName).To(Equal("testdb"))
 			Expect(connection.NumConns).To(Equal(3))
 			Expect(len(connection.ConnPool)).To(Equal(3))
+			Expect(len(connection.Tx)).To(Equal(3))
 		})
 		It("does not connect if the database exists but the connection is refused", func() {
 			connection.Driver = testhelper.TestDriver{ErrToReturn: fmt.Errorf("pq: connection refused"), DB: mockdb, User: "testrole"}
@@ -128,18 +130,22 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			connection.MustConnect(3)
 			Expect(connection.NumConns).To(Equal(3))
 			Expect(len(connection.ConnPool)).To(Equal(3))
+			Expect(len(connection.Tx)).To(Equal(3))
 			connection.Close()
 			Expect(connection.NumConns).To(Equal(0))
 			Expect(connection.ConnPool).To(BeNil())
+			Expect(connection.Tx).To(BeNil())
 		})
 		It("does nothing if there are no open connections", func() {
 			connection.MustConnect(3)
 			connection.Close()
 			Expect(connection.NumConns).To(Equal(0))
 			Expect(connection.ConnPool).To(BeNil())
+			Expect(connection.Tx).To(BeNil())
 			connection.Close()
 			Expect(connection.NumConns).To(Equal(0))
 			Expect(connection.ConnPool).To(BeNil())
+			Expect(connection.Tx).To(BeNil())
 		})
 	})
 	Describe("DBConn.Exec", func() {

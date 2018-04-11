@@ -42,7 +42,7 @@ type DBConn struct {
 	DBName   string
 	Host     string
 	Port     int
-	Tx       *sqlx.Tx
+	Tx       []*sqlx.Tx
 	Version  GPDBVersion
 }
 
@@ -97,36 +97,22 @@ func NewDBConn(dbname string) *DBConn {
 	}
 }
 
-/*
- * This function doesn't allow Begin()ing if there are multiple connections,
- * since for example Connect()ing with a pool of 2 connections and trying to
- * Select() on connection 1 doesn't really make sense given the "automatic
- * transaction" behavior of Get/Exec/Select, as explained in the relevant
- * comment below.
- *
- * TODO: Refactor transaction logic to allow starting multiple transactions
- * on different connections while leaving other connections transaction-less,
- * in such a way that one cannot easily accidentally execute a query intended
- * to be part of a transaction on a transaction-less connection or vice versa.
- */
-func (dbconn *DBConn) MustBegin() {
-	err := dbconn.Begin()
+func (dbconn *DBConn) MustBegin(whichConn ...int) {
+	err := dbconn.Begin(whichConn...)
 	gplog.FatalOnError(err)
 }
 
-func (dbconn *DBConn) Begin() error {
-	if dbconn.NumConns > 1 {
-		return errors.New("Cannot begin transaction; the connection was initialized with a connection pool size larger than 1")
-	}
-	if dbconn.Tx != nil {
+func (dbconn *DBConn) Begin(whichConn ...int) error {
+	connNum := dbconn.ValidateConnNum(whichConn...)
+	if dbconn.Tx[connNum] != nil {
 		return errors.New("Cannot begin transaction; there is already a transaction in progress")
 	}
 	var err error
-	dbconn.Tx, err = dbconn.ConnPool[0].Beginx()
+	dbconn.Tx[connNum], err = dbconn.ConnPool[connNum].Beginx()
 	if err != nil {
 		return err
 	}
-	_, err = dbconn.Exec("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+	_, err = dbconn.Exec("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE", connNum)
 	return err
 }
 
@@ -142,17 +128,33 @@ func (dbconn *DBConn) Close() {
 	}
 }
 
-func (dbconn *DBConn) MustCommit() {
-	err := dbconn.Commit()
+func (dbconn *DBConn) MustCommit(whichConn ...int) {
+	err := dbconn.Commit(whichConn...)
 	gplog.FatalOnError(err)
 }
 
-func (dbconn *DBConn) Commit() error {
-	if dbconn.Tx == nil {
+func (dbconn *DBConn) Commit(whichConn ...int) error {
+	connNum := dbconn.ValidateConnNum(whichConn...)
+	if dbconn.Tx[connNum] == nil {
 		return errors.New("Cannot commit transaction; there is no transaction in progress")
 	}
-	err := dbconn.Tx.Commit()
-	dbconn.Tx = nil
+	err := dbconn.Tx[connNum].Commit()
+	dbconn.Tx[connNum] = nil
+	return err
+}
+
+func (dbconn *DBConn) MustRollback(whichConn ...int) {
+	err := dbconn.Rollback(whichConn...)
+	gplog.FatalOnError(err)
+}
+
+func (dbconn *DBConn) Rollback(whichConn ...int) error {
+	connNum := dbconn.ValidateConnNum(whichConn...)
+	if dbconn.Tx[connNum] == nil {
+		return errors.New("Cannot rollback transaction; there is no transaction in progress")
+	}
+	err := dbconn.Tx[connNum].Rollback()
+	dbconn.Tx[connNum] = nil
 	return err
 }
 
@@ -182,6 +184,7 @@ func (dbconn *DBConn) Connect(numConns int) error {
 		conn.SetMaxIdleConns(1)
 		dbconn.ConnPool[i] = conn
 	}
+	dbconn.Tx = make([]*sqlx.Tx, numConns)
 	dbconn.NumConns = numConns
 	return nil
 }
@@ -211,10 +214,10 @@ func (dbconn *DBConn) handleConnectionError(err error) error {
  */
 
 func (dbconn *DBConn) Exec(query string, whichConn ...int) (sql.Result, error) {
-	if dbconn.Tx != nil {
-		return dbconn.Tx.Exec(query)
-	}
 	connNum := dbconn.ValidateConnNum(whichConn...)
+	if dbconn.Tx[connNum] != nil {
+		return dbconn.Tx[connNum].Exec(query)
+	}
 	return dbconn.ConnPool[connNum].Exec(query)
 }
 
@@ -224,18 +227,18 @@ func (dbconn *DBConn) MustExec(query string, whichConn ...int) {
 }
 
 func (dbconn *DBConn) Get(destination interface{}, query string, whichConn ...int) error {
-	if dbconn.Tx != nil {
-		return dbconn.Tx.Get(destination, query)
-	}
 	connNum := dbconn.ValidateConnNum(whichConn...)
+	if dbconn.Tx[connNum] != nil {
+		return dbconn.Tx[connNum].Get(destination, query)
+	}
 	return dbconn.ConnPool[connNum].Get(destination, query)
 }
 
 func (dbconn *DBConn) Select(destination interface{}, query string, whichConn ...int) error {
-	if dbconn.Tx != nil {
-		return dbconn.Tx.Select(destination, query)
-	}
 	connNum := dbconn.ValidateConnNum(whichConn...)
+	if dbconn.Tx[connNum] != nil {
+		return dbconn.Tx[connNum].Select(destination, query)
+	}
 	return dbconn.ConnPool[connNum].Select(destination, query)
 }
 
