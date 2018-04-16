@@ -47,12 +47,27 @@ var _ = Describe("dbconn/dbconn tests", func() {
 	})
 	Describe("NewDBConn", func() {
 		It("gets the DBName from the dbname flag if it is set", func() {
-			connection = dbconn.NewDBConn("testdb")
+			connection = dbconn.NewDBConnFromEnvironment("testdb")
 			Expect(connection.DBName).To(Equal("testdb"))
+		})
+		It("gets the DB info", func() {
+			connection = dbconn.NewDBConn("testdb", "testuser", "mars", 1234)
+			Expect(connection.DBName).To(Equal("testdb"))
+			Expect(connection.User).To(Equal("testuser"))
+			Expect(connection.Host).To(Equal("mars"))
+			Expect(connection.Port).To(Equal(1234))
 		})
 		It("fails if no database is given with the dbname flag", func() {
 			defer testhelper.ShouldPanicWithMessage("No database provided")
-			connection = dbconn.NewDBConn("")
+			connection = dbconn.NewDBConnFromEnvironment("")
+		})
+		It("fails if username is an empty string", func() {
+			defer testhelper.ShouldPanicWithMessage("No username provided")
+			connection = dbconn.NewDBConn("testdb", "", "mars", 1234)
+		})
+		It("fails if host is an empty string", func() {
+			defer testhelper.ShouldPanicWithMessage("No host provided")
+			connection = dbconn.NewDBConn("testdb", "testuser", "", 1234)
 		})
 	})
 	Describe("DBConn.MustConnect", func() {
@@ -62,7 +77,7 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			if connection != nil {
 				connection.Close()
 			}
-			connection = dbconn.NewDBConn("testdb")
+			connection = dbconn.NewDBConnFromEnvironment("testdb")
 			connection.Driver = testhelper.TestDriver{DB: mockdb, User: "testrole"}
 		})
 		AfterEach(func() {
@@ -104,7 +119,7 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			os.Setenv("PGUSER", "nonexistent")
 			defer os.Setenv("PGUSER", oldPgUser)
 
-			connection = dbconn.NewDBConn("testdb")
+			connection = dbconn.NewDBConnFromEnvironment("testdb")
 			connection.Driver = testhelper.TestDriver{ErrToReturn: fmt.Errorf("pq: role \"nonexistent\" does not exist"), DB: mockdb, DBName: "testdb", User: "nonexistent"}
 			Expect(connection.User).To(Equal("nonexistent"))
 			defer testhelper.ShouldPanicWithMessage("Role \"nonexistent\" does not exist, exiting")
@@ -115,7 +130,7 @@ var _ = Describe("dbconn/dbconn tests", func() {
 		var mockdb *sqlx.DB
 		BeforeEach(func() {
 			mockdb, mock = testhelper.CreateMockDB()
-			connection = dbconn.NewDBConn("testdb")
+			connection = dbconn.NewDBConnFromEnvironment("testdb")
 			connection.Driver = testhelper.TestDriver{DB: mockdb, User: "testrole"}
 		})
 		It("successfully closes a dbconn with a single open connection", func() {
