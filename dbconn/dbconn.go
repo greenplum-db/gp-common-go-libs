@@ -124,6 +124,7 @@ func (dbconn *DBConn) Close() {
 			}
 		}
 		dbconn.ConnPool = nil
+		dbconn.Tx = nil
 		dbconn.NumConns = 0
 	}
 }
