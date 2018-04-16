@@ -65,7 +65,7 @@ func (driver GPDBDriver) Connect(driverName string, dataSourceName string) (*sql
  * Database functions
  */
 
-func NewDBConn(dbname string) *DBConn {
+func NewDBConnFromEnvironment(dbname string) *DBConn {
 	if dbname == "" {
 		gplog.Fatal(errors.New("No database provided"), "")
 	}
@@ -82,6 +82,22 @@ func NewDBConn(dbname string) *DBConn {
 	port, err := strconv.Atoi(operating.System.Getenv("PGPORT"))
 	if err != nil {
 		port = 5432
+	}
+
+	return NewDBConn(dbname, username, host, port)
+}
+
+func NewDBConn(dbname, username, host string, port int) *DBConn {
+	if dbname == "" {
+		gplog.Fatal(errors.New("No database provided"), "")
+	}
+
+	if username == "" {
+		gplog.Fatal(errors.New("No username provided"), "")
+	}
+
+	if host == "" {
+		gplog.Fatal(errors.New("No host provided"), "")
 	}
 
 	return &DBConn{
