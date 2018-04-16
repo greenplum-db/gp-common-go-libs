@@ -274,7 +274,7 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			mock.ExpectCommit()
 			connection.MustBegin()
 			connection.MustCommit()
-			Expect(connection.Tx).To(BeNil())
+			Expect(connection.Tx[0]).To(BeNil())
 		})
 		It("panics if it executes a COMMIT outside a transaction", func() {
 			defer testhelper.ShouldPanicWithMessage("Cannot commit transaction; there is no transaction in progress")
