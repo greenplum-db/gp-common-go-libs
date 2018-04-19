@@ -18,15 +18,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/lib/pq"
-  packages = [
-    ".",
-    "oid"
-  ]
-  revision = "88edab0803230a3898347e77b474f8c1820a1f20"
-
-[[projects]]
-  branch = "master"
   name = "github.com/onsi/ginkgo"
   packages = [
     ".",
@@ -69,6 +60,12 @@
   ]
   revision = "003f63b7f4cff3fc95357005358af2de0f5fe152"
   version = "v1.3.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/pf-qiu/pq"
+  packages = [".","oid"]
+  revision = "b643a65692252024cb4316b438f449403432ccd1"
 
 [[projects]]
   name = "github.com/pkg/errors"
@@ -131,6 +128,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9b48cdf280444383e8c5c9936d12ad65a8970fda7d9d77ac974c91c167d27307"
+  inputs-digest = "93c4c51be2b4f051a21748c377bab2be10a75db1838250a4f50fc83265acddf8"
   solver-name = "gps-cdcl"
   solver-version = 1

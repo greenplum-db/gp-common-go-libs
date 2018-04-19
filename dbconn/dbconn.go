@@ -14,7 +14,10 @@ import (
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq" // Need driver for postgres
+
+	// TODO: revert to lib/pq after https://github.com/lib/pq/pull/743 is merged
+	_ "github.com/pf-qiu/pq" // Need driver for postgres
+
 	"github.com/pkg/errors"
 )
 
