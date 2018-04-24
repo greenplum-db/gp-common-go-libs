@@ -12,13 +12,12 @@ GOFLAGS :=
 .PHONY : coverage
 
 dependencies :
-		go get golang.org/x/tools/cmd/goimports
-		go get github.com/golang/lint/golint
-		go get github.com/onsi/ginkgo/ginkgo
 		go get github.com/alecthomas/gometalinter
 		gometalinter --install
 		go get github.com/golang/dep/cmd/dep
 		dep ensure
+		@cd vendor/golang.org/x/tools/cmd/goimports; go install .
+		@cd vendor/github.com/onsi/ginkgo/ginkgo; go install .
 
 format :
 		goimports -w .
