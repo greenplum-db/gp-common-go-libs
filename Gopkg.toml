@@ -24,6 +24,7 @@
 #   go-tests = true
 #   unused-packages = true
 
+required = ["golang.org/x/tools/cmd/goimports", "github.com/onsi/ginkgo/ginkgo"]
 
 [[constraint]]
   branch = "master"
