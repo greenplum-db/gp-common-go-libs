@@ -4,7 +4,7 @@ resources:
   type: git
   source:
     uri: https://github.com/greenplum-db/gp-common-go-libs
-    branch: add_packages
+    branch: master
 
 jobs:
 - name: units
