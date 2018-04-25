@@ -244,11 +244,10 @@ func (dbconn *DBConn) MustExec(query string, whichConn ...int) {
 }
 
 func (dbconn *DBConn) GetWithArgs(destination interface{}, query string, args ...interface{}) error {
-	connNum := 0
-	if dbconn.Tx[connNum] != nil {
-		return dbconn.Tx[connNum].Get(destination, query, args...)
+	if dbconn.Tx[0] != nil {
+		return dbconn.Tx[0].Get(destination, query, args...)
 	}
-	return dbconn.ConnPool[connNum].Get(destination, query, args...)
+	return dbconn.ConnPool[0].Get(destination, query, args...)
 }
 
 func (dbconn *DBConn) Get(destination interface{}, query string, whichConn ...int) error {
@@ -260,11 +259,10 @@ func (dbconn *DBConn) Get(destination interface{}, query string, whichConn ...in
 }
 
 func (dbconn *DBConn) SelectWithArgs(destination interface{}, query string, args ...interface{}) error {
-	connNum := 0
-	if dbconn.Tx[connNum] != nil {
-		return dbconn.Tx[connNum].Select(destination, query, args...)
+	if dbconn.Tx[0] != nil {
+		return dbconn.Tx[0].Select(destination, query, args...)
 	}
-	return dbconn.ConnPool[connNum].Select(destination, query, args...)
+	return dbconn.ConnPool[0].Select(destination, query, args...)
 }
 
 func (dbconn *DBConn) Select(destination interface{}, query string, whichConn ...int) error {

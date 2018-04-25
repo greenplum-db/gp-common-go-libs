@@ -205,8 +205,8 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			Expect(testRecord.Tablename).To(Equal("table1"))
 		})
 		It("executes a GET with argument outside of a transaction", func() {
-			arg1 := "1"
-			arg2 := 2
+			arg1 := "table1"
+			arg2 := "table2"
 			two_col_single_row := sqlmock.NewRows([]string{"schemaname", "tablename"}).
 				AddRow("schema1", "table1")
 			mock.ExpectQuery("SELECT (.*)").WithArgs(arg1, arg2).WillReturnRows(two_col_single_row)
@@ -216,7 +216,7 @@ var _ = Describe("dbconn/dbconn tests", func() {
 				Tablename  string
 			}{}
 
-			err := connection.GetWithArgs(&testRecord, "SELECT schemaname, tablename FROM two_columns ORDER BY schemaname", arg1, arg2)
+			err := connection.GetWithArgs(&testRecord, "SELECT schemaname, tablename FROM two_columns WHERE tablename=$1 OR tablename=$2", arg1, arg2)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(testRecord.Schemaname).To(Equal("schema1"))
 			Expect(testRecord.Tablename).To(Equal("table1"))
@@ -263,8 +263,8 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			Expect(testSlice[1].Tablename).To(Equal("table2"))
 		})
 		It("executes a SELECT with argument outside of a transaction", func() {
-			arg1 := "1"
-			arg2 := 2
+			arg1 := "table1"
+			arg2 := "table2"
 			two_col_rows := sqlmock.NewRows([]string{"schemaname", "tablename"}).
 				AddRow("schema1", "table1").
 				AddRow("schema2", "table2")
@@ -275,7 +275,7 @@ var _ = Describe("dbconn/dbconn tests", func() {
 				Tablename  string
 			}, 0)
 
-			err := connection.SelectWithArgs(&testSlice, "SELECT schemaname, tablename FROM two_columns ORDER BY schemaname LIMIT 2", arg1, arg2)
+			err := connection.SelectWithArgs(&testSlice, "SELECT schemaname, tablename FROM two_columns WHERE tablename=$1 OR tablename=$2", arg1, arg2)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(testSlice)).To(Equal(2))
