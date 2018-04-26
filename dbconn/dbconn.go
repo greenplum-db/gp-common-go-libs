@@ -243,12 +243,26 @@ func (dbconn *DBConn) MustExec(query string, whichConn ...int) {
 	gplog.FatalOnError(err)
 }
 
+func (dbconn *DBConn) GetWithArgs(destination interface{}, query string, args ...interface{}) error {
+	if dbconn.Tx[0] != nil {
+		return dbconn.Tx[0].Get(destination, query, args...)
+	}
+	return dbconn.ConnPool[0].Get(destination, query, args...)
+}
+
 func (dbconn *DBConn) Get(destination interface{}, query string, whichConn ...int) error {
 	connNum := dbconn.ValidateConnNum(whichConn...)
 	if dbconn.Tx[connNum] != nil {
 		return dbconn.Tx[connNum].Get(destination, query)
 	}
 	return dbconn.ConnPool[connNum].Get(destination, query)
+}
+
+func (dbconn *DBConn) SelectWithArgs(destination interface{}, query string, args ...interface{}) error {
+	if dbconn.Tx[0] != nil {
+		return dbconn.Tx[0].Select(destination, query, args...)
+	}
+	return dbconn.ConnPool[0].Select(destination, query, args...)
 }
 
 func (dbconn *DBConn) Select(destination interface{}, query string, whichConn ...int) error {

@@ -204,6 +204,23 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			Expect(testRecord.Schemaname).To(Equal("schema1"))
 			Expect(testRecord.Tablename).To(Equal("table1"))
 		})
+		It("executes a GET with argument outside of a transaction", func() {
+			arg1 := "table1"
+			arg2 := "table2"
+			two_col_single_row := sqlmock.NewRows([]string{"schemaname", "tablename"}).
+				AddRow("schema1", "table1")
+			mock.ExpectQuery("SELECT (.*)").WithArgs(arg1, arg2).WillReturnRows(two_col_single_row)
+
+			testRecord := struct {
+				Schemaname string
+				Tablename  string
+			}{}
+
+			err := connection.GetWithArgs(&testRecord, "SELECT schemaname, tablename FROM two_columns WHERE tablename=$1 OR tablename=$2", arg1, arg2)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(testRecord.Schemaname).To(Equal("schema1"))
+			Expect(testRecord.Tablename).To(Equal("table1"))
+		})
 		It("executes a GET in a transaction", func() {
 			two_col_single_row := sqlmock.NewRows([]string{"schemaname", "tablename"}).
 				AddRow("schema1", "table1")
@@ -237,6 +254,28 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			}, 0)
 
 			err := connection.Select(&testSlice, "SELECT schemaname, tablename FROM two_columns ORDER BY schemaname LIMIT 2")
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(testSlice)).To(Equal(2))
+			Expect(testSlice[0].Schemaname).To(Equal("schema1"))
+			Expect(testSlice[0].Tablename).To(Equal("table1"))
+			Expect(testSlice[1].Schemaname).To(Equal("schema2"))
+			Expect(testSlice[1].Tablename).To(Equal("table2"))
+		})
+		It("executes a SELECT with argument outside of a transaction", func() {
+			arg1 := "table1"
+			arg2 := "table2"
+			two_col_rows := sqlmock.NewRows([]string{"schemaname", "tablename"}).
+				AddRow("schema1", "table1").
+				AddRow("schema2", "table2")
+			mock.ExpectQuery("SELECT (.*)").WithArgs(arg1, arg2).WillReturnRows(two_col_rows)
+
+			testSlice := make([]struct {
+				Schemaname string
+				Tablename  string
+			}, 0)
+
+			err := connection.SelectWithArgs(&testSlice, "SELECT schemaname, tablename FROM two_columns WHERE tablename=$1 OR tablename=$2", arg1, arg2)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(testSlice)).To(Equal(2))
