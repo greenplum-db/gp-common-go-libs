@@ -2,7 +2,8 @@
 
 DIR="github.com/greenplum-db/gp-common-go-libs"
 RESULTS="/tmp/results.out"
-for PACKAGE in "gplog" "structmatcher" "dbconn" "cluster"; do
+echo "mode: set" > /tmp/coverage.out # Need this line at the start of the file for the total coverage at the end
+for PACKAGE in "cluster" "dbconn" "gplog" "iohelper" "structmatcher"; do
   # Generate code coverage statistics for all packages, write the coverage statistics to a file, and print the coverage percentage to the shell
   go test -coverpkg "$DIR/$PACKAGE" "$DIR/$PACKAGE" -coverprofile="/tmp/unit_$PACKAGE.out" | awk '{printf("%s unit test coverage|%s", $2, $5)}' | awk -F"/" '{print $4}' >> $RESULTS
   # Filter out the first "mode: set" line from each coverage file and concatenate them all
