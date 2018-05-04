@@ -77,7 +77,8 @@ var _ = Describe("cluster/cluster tests", func() {
 		It("returns a configuration for a single-host, single-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...)
 			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
-			results := cluster.GetSegmentConfiguration(connection)
+			results, err := cluster.GetSegmentConfiguration(connection)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
 			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
 			Expect(results[0].Hostname).To(Equal("localhost"))
@@ -85,7 +86,8 @@ var _ = Describe("cluster/cluster tests", func() {
 		It("returns a configuration for a single-host, multi-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...).AddRow(localSegTwo...)
 			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
-			results := cluster.GetSegmentConfiguration(connection)
+			results, err := cluster.GetSegmentConfiguration(connection)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(2))
 			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
 			Expect(results[0].Hostname).To(Equal("localhost"))
@@ -95,7 +97,8 @@ var _ = Describe("cluster/cluster tests", func() {
 		It("returns a configuration for a multi-host, multi-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...).AddRow(localSegTwo...).AddRow(remoteSegOne...)
 			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
-			results := cluster.GetSegmentConfiguration(connection)
+			results, err := cluster.GetSegmentConfiguration(connection)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(3))
 			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
 			Expect(results[0].Hostname).To(Equal("localhost"))

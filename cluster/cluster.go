@@ -239,7 +239,7 @@ func (cluster *Cluster) GetHostForContent(contentID int) string {
  * Helper functions
  */
 
-func GetSegmentConfiguration(connection *dbconn.DBConn) []SegConfig {
+func GetSegmentConfiguration(connection *dbconn.DBConn) ([]SegConfig, error) {
 	query := ""
 	if connection.Version.Before("6") {
 		query = `
@@ -265,8 +265,16 @@ ORDER BY content;`
 
 	results := make([]SegConfig, 0)
 	err := connection.Select(&results, query)
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+func MustGetSegmentConfiguration(connection *dbconn.DBConn) []SegConfig {
+	segConfigs, err := GetSegmentConfiguration(connection)
 	gplog.FatalOnError(err)
-	return results
+	return segConfigs
 }
 
 func ConstructSSHCommand(host string, cmd string) []string {
