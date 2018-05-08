@@ -72,14 +72,16 @@ const (
  *          cannot be reached.  This function will exit the program after printing
  *          the error message.
  */
+type LogPrefixFunc func(string) string
 
 type GpLogger struct {
-	logStdout   *log.Logger
-	logStderr   *log.Logger
-	logFile     *log.Logger
-	logFileName string
-	verbosity   int
-	header      string
+	logStdout     *log.Logger
+	logStderr     *log.Logger
+	logFile       *log.Logger
+	logFileName   string
+	verbosity     int
+	header        string
+	logPrefixFunc LogPrefixFunc
 }
 
 /*
@@ -120,16 +122,17 @@ func GetLogger() *GpLogger {
 // stdout and stderr are passed in to this function to enable output redirection in tests.
 func NewLogger(stdout io.Writer, stderr io.Writer, logFile io.Writer, logFileName string, verbosity int, program string) *GpLogger {
 	return &GpLogger{
-		logStdout:   log.New(stdout, "", 0),
-		logStderr:   log.New(stderr, "", 0),
-		logFile:     log.New(logFile, "", 0),
-		logFileName: logFileName,
-		verbosity:   verbosity,
-		header:      getHeader(program),
+		logStdout:     log.New(stdout, "", 0),
+		logStderr:     log.New(stderr, "", 0),
+		logFile:       log.New(logFile, "", 0),
+		logFileName:   logFileName,
+		verbosity:     verbosity,
+		header:        GetHeader(program),
+		logPrefixFunc: nil,
 	}
 }
 
-func getHeader(program string) string {
+func GetHeader(program string) string {
 	headerFormatStr := "%s:%s:%s:%06d-[%s]:-" // PROGRAMNAME:USERNAME:HOSTNAME:PID-[LOGLEVEL]:-
 	currentUser, _ := operating.System.CurrentUser()
 	user := currentUser.Username
@@ -137,12 +140,22 @@ func getHeader(program string) string {
 	pid := operating.System.Getpid()
 	header := fmt.Sprintf(headerFormatStr, program, user, host, pid, "%s")
 	return header
+}
 
+func SetLogPrefixFunc(logPrefixFunc func(string) string) {
+	logger.logPrefixFunc = logPrefixFunc
+}
+
+func defaultLogPrefixFunc(level string) string {
+	logTimestamp := operating.System.Now().Format("20060102:15:04:05")
+	return fmt.Sprintf("%s %s", logTimestamp, fmt.Sprintf(logger.header, level))
 }
 
 func GetLogPrefix(level string) string {
-	logTimestamp := operating.System.Now().Format("20060102:15:04:05")
-	return fmt.Sprintf("%s %s", logTimestamp, fmt.Sprintf(logger.header, level))
+	if logger.logPrefixFunc != nil {
+		return logger.logPrefixFunc(level)
+	}
+	return defaultLogPrefixFunc(level)
 }
 
 func GetLogFilePath() string {

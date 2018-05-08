@@ -119,6 +119,19 @@ var _ = Describe("logger/log tests", func() {
 			prefix := gplog.GetLogPrefix("INFO")
 			Expect(expectedMessage).To(Equal(prefix))
 		})
+		It("returns a custom prefix", func() {
+			expectedMessage := "20170101:01:01:01 testProgram:testUser:testHost:000000-[INFO]:- my extended info"
+
+			myPrefixFunc := func(level string) string {
+				logTimestamp := operating.System.Now().Format("20060102:15:04:05")
+				return fmt.Sprintf("%s %s %s", logTimestamp, fmt.Sprintf(gplog.GetHeader("testProgram"), level), "my extended info")
+			}
+			gplog.SetLogPrefixFunc(myPrefixFunc)
+
+			prefix := gplog.GetLogPrefix("INFO")
+			Expect(expectedMessage).To(Equal(prefix))
+			gplog.SetLogPrefixFunc(nil)
+		})
 	})
 	Describe("Output function tests", func() {
 		patternExpected := "20170101:01:01:01 testProgram:testUser:testHost:000000-[%s]:-"
