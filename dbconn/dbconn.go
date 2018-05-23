@@ -136,7 +136,7 @@ func (dbconn *DBConn) Close() {
 	if dbconn.ConnPool != nil {
 		for _, conn := range dbconn.ConnPool {
 			if conn != nil {
-				conn.Close()
+				_ = conn.Close()
 			}
 		}
 		dbconn.ConnPool = nil

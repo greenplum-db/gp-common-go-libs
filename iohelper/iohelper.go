@@ -78,7 +78,7 @@ func FileExistsAndIsReadable(filename string) bool {
 		var fileHandle io.ReadCloser
 		fileHandle, err = OpenFileForReading(filename)
 		if fileHandle != nil {
-			fileHandle.Close()
+			_ = fileHandle.Close()
 		}
 		if err == nil {
 			return true

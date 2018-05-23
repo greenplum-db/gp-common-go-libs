@@ -186,9 +186,9 @@ func Info(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 	message := GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
-	logger.logFile.Output(1, message)
+	_ = logger.logFile.Output(1, message)
 	if logger.verbosity >= LOGINFO {
-		logger.logStdout.Output(1, message)
+		_ = logger.logStdout.Output(1, message)
 	}
 }
 
@@ -196,17 +196,17 @@ func Warn(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 	message := GetLogPrefix("WARNING") + fmt.Sprintf(s, v...)
-	logger.logFile.Output(1, message)
-	logger.logStdout.Output(1, message)
+	_ = logger.logFile.Output(1, message)
+	_ = logger.logStdout.Output(1, message)
 }
 
 func Verbose(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 	message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
-	logger.logFile.Output(1, message)
+	_ = logger.logFile.Output(1, message)
 	if logger.verbosity >= LOGVERBOSE {
-		logger.logStdout.Output(1, message)
+		_ = logger.logStdout.Output(1, message)
 	}
 }
 
@@ -214,9 +214,9 @@ func Debug(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 	message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
-	logger.logFile.Output(1, message)
+	_ = logger.logFile.Output(1, message)
 	if logger.verbosity >= LOGDEBUG {
-		logger.logStdout.Output(1, message)
+		_ = logger.logStdout.Output(1, message)
 	}
 }
 
@@ -225,8 +225,8 @@ func Error(s string, v ...interface{}) {
 	defer logMutex.Unlock()
 	message := GetLogPrefix("ERROR") + fmt.Sprintf(s, v...)
 	errorCode = 1
-	logger.logFile.Output(1, message)
-	logger.logStderr.Output(1, message)
+	_ = logger.logFile.Output(1, message)
+	_ = logger.logStderr.Output(1, message)
 }
 
 func Fatal(err error, s string, v ...interface{}) {
@@ -243,7 +243,7 @@ func Fatal(err error, s string, v ...interface{}) {
 		}
 	}
 	message += strings.TrimSpace(fmt.Sprintf(s, v...))
-	logger.logFile.Output(1, message+stackTraceStr)
+	_ = logger.logFile.Output(1, message+stackTraceStr)
 	if logger.verbosity >= LOGVERBOSE {
 		abort(message + stackTraceStr)
 	} else {
