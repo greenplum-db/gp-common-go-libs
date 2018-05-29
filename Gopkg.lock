@@ -14,7 +14,7 @@
     ".",
     "reflectx"
   ]
-  revision = "05cef0741ade10ca668982355b3f3f0bcf0ff0a8"
+  revision = "2aeb6a910c2b94f2d5eb53d9895d80e27264ec41"
 
 [[projects]]
   branch = "master"
@@ -23,10 +23,9 @@
     ".",
     "oid"
   ]
-  revision = "88edab0803230a3898347e77b474f8c1820a1f20"
+  revision = "90697d60dd844d5ef6ff15135d0203f65d2f53b8"
 
 [[projects]]
-  branch = "master"
   name = "github.com/onsi/ginkgo"
   packages = [
     ".",
@@ -55,7 +54,8 @@
     "reporters/stenographer/support/go-isatty",
     "types"
   ]
-  revision = "747514b53ddd06d5d37d096c1cb313cfe620d7d4"
+  revision = "fa5fabab2a1bfbd924faf4c067d07ae414e2aedf"
+  version = "v1.5.0"
 
 [[projects]]
   name = "github.com/onsi/gomega"
@@ -74,8 +74,8 @@
     "matchers/support/goraph/util",
     "types"
   ]
-  revision = "003f63b7f4cff3fc95357005358af2de0f5fe152"
-  version = "v1.3.0"
+  revision = "62bff4df71bdbc266561a0caee19f0594b17c240"
+  version = "v1.4.0"
 
 [[projects]]
   name = "github.com/pkg/errors"
@@ -91,16 +91,15 @@
     "html/atom",
     "html/charset"
   ]
-  revision = "2fb46b16b8dda405028c50f7c7f0f9dd1fa6bfb1"
+  revision = "dfa909b99c79129e1100513e5cd36307665e5723"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "37707fdb30a5b38865cfb95e5aab41707daec7fd"
+  revision = "c11f84a56e43e20a78cee75a7c034031ecf57d1f"
 
 [[projects]]
-  branch = "master"
   name = "golang.org/x/text"
   packages = [
     "encoding",
@@ -121,7 +120,8 @@
     "transform",
     "unicode/cldr"
   ]
-  revision = "e19ae1496984b1c655b8044a65c0300a3c878dd3"
+  revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
+  version = "v0.3.0"
 
 [[projects]]
   branch = "master"
@@ -132,7 +132,7 @@
     "imports",
     "internal/fastwalk"
   ]
-  revision = "c1def519f03ddf76f16b3e444ee1095d73afa01b"
+  revision = "a5b4c53f6e8bdcafa95a94671bf2d1203365858b"
 
 [[projects]]
   name = "gopkg.in/DATA-DOG/go-sqlmock.v1"
@@ -141,14 +141,14 @@
   version = "v1.3.0"
 
 [[projects]]
-  branch = "v2"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
-  revision = "d670f9405373e636a5a2765eea47fac0c9bc91a4"
+  revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
+  version = "v2.2.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3dd0d489ed7b183d66f0597b6a87426d268d22ee6cd4f5b345134fc64b5541ea"
+  inputs-digest = "0898a326dc9933990618d3a5497e725420c9131a9d718d4927f24f6f02cc3939"
   solver-name = "gps-cdcl"
   solver-version = 1
