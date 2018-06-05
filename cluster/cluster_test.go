@@ -46,12 +46,13 @@ var _ = BeforeEach(func() {
 })
 
 var _ = Describe("cluster/cluster tests", func() {
-	masterSeg := cluster.SegConfig{ContentID: -1, Hostname: "localhost", DataDir: "/data/gpseg-1"}
-	localSegOne := cluster.SegConfig{ContentID: 0, Hostname: "localhost", DataDir: "/data/gpseg0"}
-	remoteSegOne := cluster.SegConfig{ContentID: 1, Hostname: "remotehost1", DataDir: "/data/gpseg1"}
-	remoteSegTwo := cluster.SegConfig{ContentID: 2, Hostname: "remotehost2", DataDir: "/data/gpseg2"}
+	masterSeg := cluster.SegConfig{DbID: 1, ContentID: -1, Port: 5432, Hostname: "localhost", DataDir: "/data/gpseg-1"}
+	localSegOne := cluster.SegConfig{DbID: 2, ContentID: 0, Port: 20000, Hostname: "localhost", DataDir: "/data/gpseg0"}
+	remoteSegOne := cluster.SegConfig{DbID: 3, ContentID: 1, Port: 20001, Hostname: "remotehost1", DataDir: "/data/gpseg1"}
+	localSegTwo := cluster.SegConfig{DbID: 4, ContentID: 2, Port: 20002, Hostname: "localhost", DataDir: "/data/gpseg2"}
+	remoteSegTwo := cluster.SegConfig{DbID: 5, ContentID: 3, Port: 20003, Hostname: "remotehost2", DataDir: "/data/gpseg3"}
 	var (
-		testCluster  cluster.Cluster
+		testCluster  *cluster.Cluster
 		testExecutor *testhelper.TestExecutor
 	)
 
@@ -165,7 +166,7 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(len(commandMap)).To(Equal(3))
 			Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "echo 0"}))
 			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "echo 1"}))
-			Expect(commandMap[2]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 2"}))
+			Expect(commandMap[3]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 3"}))
 		})
 	})
 	Describe("GenerateSSHCommandMapForHosts", func() {
@@ -234,7 +235,7 @@ var _ = Describe("cluster/cluster tests", func() {
 				Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "echo 0"}))
 			}
 			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "echo 1"}))
-			Expect(commandMap[2]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 2"}))
+			Expect(commandMap[3]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 3"}))
 		})
 		It("Returns a map of ssh commands for one master host and two remote hosts, excluding the master host", func() {
 			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, remoteSegOne, remoteSegTwo})
@@ -244,7 +245,7 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(len(commandMap)).To(Equal(3))
 			Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "echo 0"}))
 			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "echo 1"}))
-			Expect(commandMap[2]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 2"}))
+			Expect(commandMap[3]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 3"}))
 		})
 	})
 	Describe("ExecuteLocalCommand", func() {
@@ -381,37 +382,33 @@ var _ = Describe("cluster/cluster tests", func() {
 		})
 	})
 	Describe("cluster setup and accessor functions", func() {
-		masterSeg := cluster.SegConfig{ContentID: -1, Hostname: "localhost", DataDir: "/data/gpseg-1"}
-		localSegOne := cluster.SegConfig{ContentID: 0, Hostname: "localhost", DataDir: "/data/gpseg0"}
-		localSegTwo := cluster.SegConfig{ContentID: 1, Hostname: "localhost", DataDir: "/data/gpseg1"}
-		remoteSegTwo := cluster.SegConfig{ContentID: 1, Hostname: "remotehost", DataDir: "/data/gpseg1"}
-		It("returns content dir for a single-host, single-segment nodes", func() {
+		It("returns content dir for a single-host, single-segment cluster", func() {
 			cluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne})
 			Expect(len(cluster.GetContentList())).To(Equal(2))
-			Expect(cluster.SegDirMap[-1]).To(Equal("/data/gpseg-1"))
+			Expect(cluster.Segments[-1].DataDir).To(Equal("/data/gpseg-1"))
 			Expect(cluster.GetHostForContent(-1)).To(Equal("localhost"))
-			Expect(cluster.SegDirMap[0]).To(Equal("/data/gpseg0"))
+			Expect(cluster.Segments[0].DataDir).To(Equal("/data/gpseg0"))
 			Expect(cluster.GetHostForContent(0)).To(Equal("localhost"))
 		})
 		It("sets up the configuration for a single-host, multi-segment cluster", func() {
 			cluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, localSegTwo})
 			Expect(len(cluster.GetContentList())).To(Equal(3))
-			Expect(cluster.SegDirMap[-1]).To(Equal("/data/gpseg-1"))
+			Expect(cluster.Segments[-1].DataDir).To(Equal("/data/gpseg-1"))
 			Expect(cluster.GetHostForContent(-1)).To(Equal("localhost"))
-			Expect(cluster.SegDirMap[0]).To(Equal("/data/gpseg0"))
+			Expect(cluster.Segments[0].DataDir).To(Equal("/data/gpseg0"))
 			Expect(cluster.GetHostForContent(0)).To(Equal("localhost"))
-			Expect(cluster.SegDirMap[1]).To(Equal("/data/gpseg1"))
-			Expect(cluster.GetHostForContent(1)).To(Equal("localhost"))
+			Expect(cluster.Segments[2].DataDir).To(Equal("/data/gpseg2"))
+			Expect(cluster.GetHostForContent(2)).To(Equal("localhost"))
 		})
 		It("sets up the configuration for a multi-host, multi-segment cluster", func() {
 			cluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, remoteSegTwo})
 			Expect(len(cluster.GetContentList())).To(Equal(3))
-			Expect(cluster.SegDirMap[-1]).To(Equal("/data/gpseg-1"))
+			Expect(cluster.Segments[-1].DataDir).To(Equal("/data/gpseg-1"))
 			Expect(cluster.GetHostForContent(-1)).To(Equal("localhost"))
-			Expect(cluster.SegDirMap[0]).To(Equal("/data/gpseg0"))
+			Expect(cluster.Segments[0].DataDir).To(Equal("/data/gpseg0"))
 			Expect(cluster.GetHostForContent(0)).To(Equal("localhost"))
-			Expect(cluster.SegDirMap[1]).To(Equal("/data/gpseg1"))
-			Expect(cluster.GetHostForContent(1)).To(Equal("remotehost"))
+			Expect(cluster.Segments[3].DataDir).To(Equal("/data/gpseg3"))
+			Expect(cluster.GetHostForContent(3)).To(Equal("remotehost2"))
 		})
 	})
 })
