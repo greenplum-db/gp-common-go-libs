@@ -27,13 +27,14 @@ type GPDBExecutor struct{}
 
 type Cluster struct {
 	ContentIDs []int
-	SegDirMap  map[int]string
-	SegHostMap map[int]string
+	Segments   map[int]SegConfig
 	Executor
 }
 
 type SegConfig struct {
+	DbID      int
 	ContentID int
+	Port      int
 	Hostname  string
 	DataDir   string
 }
@@ -66,17 +67,15 @@ type RemoteOutput struct {
  * Base cluster functions
  */
 
-func NewCluster(segConfigs []SegConfig) Cluster {
+func NewCluster(segConfigs []SegConfig) *Cluster {
 	cluster := Cluster{}
-	cluster.SegHostMap = make(map[int]string, 0)
-	cluster.SegDirMap = make(map[int]string, 0)
+	cluster.Segments = make(map[int]SegConfig, len(segConfigs))
 	for _, seg := range segConfigs {
 		cluster.ContentIDs = append(cluster.ContentIDs, seg.ContentID)
-		cluster.SegDirMap[seg.ContentID] = seg.DataDir
-		cluster.SegHostMap[seg.ContentID] = seg.Hostname
+		cluster.Segments[seg.ContentID] = seg
 	}
 	cluster.Executor = &GPDBExecutor{}
-	return cluster
+	return &cluster
 }
 
 func (cluster *Cluster) GenerateSegmentSSHCommand(contentID int, generateCommand func(int) string) []string {
@@ -100,16 +99,16 @@ func (cluster *Cluster) GenerateSSHCommandMapForSegments(includeMaster bool, gen
 
 func (cluster *Cluster) GenerateSSHCommandMapForHosts(includeMaster bool, generateCommand func(int) string) map[int][]string {
 	/*
-	 * Derive a list of unique hosts from hostSegMap and then generate commands
+	 * Derive a list of unique hosts from the cluster and then generate commands
 	 * for each.  If includeMaster is false but there are segments on the master
 	 * host, such as for a single-node cluster, the master host will be included.
 	 */
 	hostSegMap := make(map[string]int, 0)
-	for contentID, host := range cluster.SegHostMap {
+	for contentID, seg := range cluster.Segments {
 		if contentID == -1 && !includeMaster {
 			continue
 		}
-		hostSegMap[host] = contentID
+		hostSegMap[seg.Hostname] = contentID
 	}
 	commands := make(map[int][]string, 0)
 	for _, contentID := range hostSegMap {
@@ -231,8 +230,20 @@ func (cluster *Cluster) GetContentList() []int {
 	return cluster.ContentIDs
 }
 
+func (cluster *Cluster) GetDbidForContent(contentID int) int {
+	return cluster.Segments[contentID].DbID
+}
+
+func (cluster *Cluster) GetPortForContent(contentID int) int {
+	return cluster.Segments[contentID].Port
+}
+
 func (cluster *Cluster) GetHostForContent(contentID int) string {
-	return cluster.SegHostMap[contentID]
+	return cluster.Segments[contentID].Hostname
+}
+
+func (cluster *Cluster) GetDirForContent(contentID int) string {
+	return cluster.Segments[contentID].DataDir
 }
 
 /*
@@ -244,7 +255,9 @@ func GetSegmentConfiguration(connection *dbconn.DBConn) ([]SegConfig, error) {
 	if connection.Version.Before("6") {
 		query = `
 SELECT
+	s.dbid,
 	s.content as contentid,
+	s.port,
 	s.hostname,
 	e.fselocation as datadir
 FROM gp_segment_configuration s
@@ -255,7 +268,9 @@ ORDER BY s.content;`
 	} else {
 		query = `
 SELECT
+	dbid,
 	content as contentid,
+	port,
 	hostname,
 	datadir
 FROM gp_segment_configuration
