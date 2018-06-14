@@ -28,7 +28,7 @@ lint :
 		gometalinter --config=gometalinter.config -s vendor ./...
 
 unit :
-		ginkgo -r -randomizeSuites -randomizeAllSpecs cluster dbconn gplog iohelper structmatcher 2>&1
+		ginkgo -r -randomizeSuites -randomizeAllSpecs cluster dbconn gplog iohelper structmatcher activerecord 2>&1
 
 test : lint unit
 
