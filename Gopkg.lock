@@ -2,10 +2,25 @@
 
 
 [[projects]]
+  branch = "master"
+  name = "github.com/apcera/gssapi"
+  packages = ["."]
+  revision = "5fb4217df13b8e6878046fe1e5c10e560e1b86dc"
+
+[[projects]]
   name = "github.com/blang/semver"
   packages = ["."]
   revision = "2ee87856327ba09384cabd113bc6b5d174e9ec0f"
   version = "v3.5.1"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/greenplum-db/gp-golang-libpq"
+  packages = [
+    ".",
+    "oid"
+  ]
+  revision = "fdb3a7bbb5e884323bbc7d88d17360621624aeb2"
 
 [[projects]]
   branch = "master"
@@ -149,6 +164,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0898a326dc9933990618d3a5497e725420c9131a9d718d4927f24f6f02cc3939"
+  inputs-digest = "63a3708db895869e70d6001f3576216d15d443354c841ce8acd971e1f058f74a"
   solver-name = "gps-cdcl"
   solver-version = 1
