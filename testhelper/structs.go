@@ -36,6 +36,7 @@ func (result TestResult) RowsAffected() (int64, error) {
 }
 
 type TestExecutor struct {
+	LocalOutput     string
 	LocalError      error
 	LocalCommands   []string
 	ClusterOutput   *cluster.RemoteOutput
@@ -48,9 +49,9 @@ func (executor *TestExecutor) ExecuteLocalCommand(commandStr string) (string, er
 	executor.NumExecutions++
 	executor.LocalCommands = append(executor.LocalCommands, commandStr)
 	if executor.ErrorOnExecNum == 0 || executor.NumExecutions == executor.ErrorOnExecNum {
-		return "", executor.LocalError
+		return executor.LocalOutput, executor.LocalError
 	}
-	return "", nil
+	return executor.LocalOutput, nil
 }
 
 func (executor *TestExecutor) ExecuteClusterCommand(scope int, commandMap map[int][]string) *cluster.RemoteOutput {
