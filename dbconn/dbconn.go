@@ -13,8 +13,13 @@ import (
 
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
+	/*
+	 * We previously used github.com/lib/pq as our Postgres driver,
+	 * but it had a bug with the way it handled certain encodings.
+	 * pgx seems to handle these encodings properly.
+	 */
+	_ "github.com/jackc/pgx/stdlib"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq" // Need driver for postgres
 	"github.com/pkg/errors"
 )
 
@@ -189,10 +194,10 @@ func (dbconn *DBConn) Connect(numConns int) error {
 	}
 	dbname := EscapeConnectionParam(dbconn.DBName)
 	user := EscapeConnectionParam(dbconn.User)
-	connStr := fmt.Sprintf(`user='%s' dbname='%s' host=%s port=%d sslmode=disable`, user, dbname, dbconn.Host, dbconn.Port)
+	connStr := fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable", user, dbconn.Host, dbconn.Port, dbname)
 	dbconn.ConnPool = make([]*sqlx.DB, numConns)
 	for i := 0; i < numConns; i++ {
-		conn, err := dbconn.Driver.Connect("postgres", connStr)
+		conn, err := dbconn.Driver.Connect("pgx", connStr)
 		err = dbconn.handleConnectionError(err)
 		if err != nil {
 			return err
