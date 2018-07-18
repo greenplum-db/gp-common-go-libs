@@ -365,9 +365,11 @@ var _ = Describe("dbconn/dbconn tests", func() {
 		})
 	})
 	Describe("MustSelectString", func() {
-		header := []string{"string"}
+		header := []string{"foo"}
 		rowOne := []driver.Value{"one"}
 		rowTwo := []driver.Value{"two"}
+		headerExtraCol := []string{"foo", "bar"}
+		rowExtraCol := []driver.Value{"one", "two"}
 
 		It("returns a single string if the query selects a single string", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(rowOne...)
@@ -381,17 +383,25 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			result := dbconn.MustSelectString(connection, "SELECT foo FROM bar")
 			Expect(result).To(Equal(""))
 		})
-		It("panics if the query selects multiple strings", func() {
+		It("panics if the query selects multiple rows", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(rowOne...).AddRow(rowTwo...)
 			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
 			defer testhelper.ShouldPanicWithMessage("Too many rows returned from query: got 2 rows, expected 1 row")
 			dbconn.MustSelectString(connection, "SELECT foo FROM bar")
 		})
+		It("panics if the query selects multiple columns", func() {
+			fakeResult := sqlmock.NewRows(headerExtraCol).AddRow(rowExtraCol...)
+			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
+			defer testhelper.ShouldPanicWithMessage("Too many columns returned from query: got 2 columns, expected 1 column")
+			dbconn.MustSelectString(connection, "SELECT foo FROM bar")
+		})
 	})
 	Describe("MustSelectStringSlice", func() {
-		header := []string{"string"}
+		header := []string{"foo"}
 		rowOne := []driver.Value{"one"}
 		rowTwo := []driver.Value{"two"}
+		headerExtraCol := []string{"foo", "bar"}
+		rowExtraCol := []driver.Value{"one", "two"}
 
 		It("returns a slice containing a single string if the query selects a single string", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(rowOne...)
@@ -406,13 +416,19 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			results := dbconn.MustSelectStringSlice(connection, "SELECT foo FROM bar")
 			Expect(len(results)).To(Equal(0))
 		})
-		It("returns a slice containing multiple strings if the query selects multiple strings", func() {
+		It("returns a slice containing multiple strings if the query selects multiple rows", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(rowOne...).AddRow(rowTwo...)
 			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
 			results := dbconn.MustSelectStringSlice(connection, "SELECT foo FROM bar")
 			Expect(len(results)).To(Equal(2))
 			Expect(results[0]).To(Equal("one"))
 			Expect(results[1]).To(Equal("two"))
+		})
+		It("panics if the query selects multiple columns", func() {
+			fakeResult := sqlmock.NewRows(headerExtraCol).AddRow(rowExtraCol...)
+			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
+			defer testhelper.ShouldPanicWithMessage("Too many columns returned from query: got 2 columns, expected 1 column")
+			dbconn.MustSelectString(connection, "SELECT foo FROM bar")
 		})
 	})
 })

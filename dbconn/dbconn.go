@@ -306,9 +306,15 @@ func EscapeConnectionParam(param string) string {
 }
 
 /*
- * This is a convenience function for Select() when we're selecting single string
- * that may be NULL or not exist.  We can't use Get() because that expects exactly
- * one string and will panic if no rows are returned, even if using a sql.NullString.
+ * This is a convenience function for Select() when we're selecting a single
+ * string that may be NULL or not exist.  We can't use Get() because that
+ * expects exactly one string and will panic if no rows are returned, even if
+ * using a sql.NullString.
+ *
+ * SelectString calls SelectStringSlice and returns the first value instead of
+ * calling QueryRowx because that function doesn't indicate if there were more
+ * rows available to be returned, and we don't want to silently ignore that if
+ * only one row was expected for a given query but multiple were returned.
  */
 func MustSelectString(connection *DBConn, query string, whichConn ...int) string {
 	str, err := SelectString(connection, query, whichConn...)
@@ -317,21 +323,29 @@ func MustSelectString(connection *DBConn, query string, whichConn ...int) string
 }
 
 func SelectString(connection *DBConn, query string, whichConn ...int) (string, error) {
-	results := make([]struct{ String string }, 0)
-	connNum := connection.ValidateConnNum(whichConn...)
-	err := connection.Select(&results, query, connNum)
+	results, err := SelectStringSlice(connection, query, whichConn...)
 	if err != nil {
 		return "", err
 	}
 	if len(results) == 1 {
-		return results[0].String, nil
+		return results[0], nil
 	} else if len(results) > 1 {
 		return "", errors.Errorf("Too many rows returned from query: got %d rows, expected 1 row", len(results))
 	}
 	return "", nil
 }
 
-// This is a convenience function for Select() when we're selecting single strings.
+/*
+ * This is a convenience function for Select() when we're selecting a single
+ * column of strings that may be NULL.  Select requires defining a struct for
+ * each call, and this function uses the underlying sql functions instead of
+ * sqlx functions to avoid needing to "SELECT [column] AS [struct field]" with
+ * a generic struct or the like.
+ *
+ * It also gives a nicer error message in the event that a query is called with
+ * multiple columns, where using a generic struct gives an opaque "missing
+ * destination name" error.
+ */
 func MustSelectStringSlice(connection *DBConn, query string, whichConn ...int) []string {
 	str, err := SelectStringSlice(connection, query, whichConn...)
 	gplog.FatalOnError(err)
@@ -339,17 +353,25 @@ func MustSelectStringSlice(connection *DBConn, query string, whichConn ...int) [
 }
 
 func SelectStringSlice(connection *DBConn, query string, whichConn ...int) ([]string, error) {
-	results := make([]struct{ String string }, 0)
 	connNum := connection.ValidateConnNum(whichConn...)
-	err := connection.Select(&results, query, connNum)
+	rows, err := connection.ConnPool[connNum].Queryx(query)
 	if err != nil {
 		return []string{}, err
 	}
+	if cols, _ := rows.Rows.Columns(); len(cols) > 1 {
+		return []string{}, errors.Errorf("Too many columns returned from query: got %d columns, expected 1 column", len(cols))
+	}
 	retval := make([]string, 0)
-	for _, str := range results {
-		if str.String != "" {
-			retval = append(retval, str.String)
+	for rows.Rows.Next() {
+		var result sql.NullString
+		err = rows.Rows.Scan(&result)
+		if err != nil {
+			return []string{}, err
 		}
+		retval = append(retval, result.String)
+	}
+	if rows.Rows.Err() != nil {
+		return []string{}, rows.Rows.Err()
 	}
 	return retval, nil
 }
