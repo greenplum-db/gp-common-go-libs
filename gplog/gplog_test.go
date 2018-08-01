@@ -155,6 +155,23 @@ var _ = Describe("logger/log tests", func() {
 				gplog.FatalOnError(errors.New("this is an error"), "this is output")
 			})
 		})
+		Describe("FormatStackTrace", func() {
+			It("Prints the stack trace of an error", func() {
+				cause := errors.New("some error")
+				err := errors.Wrap(cause, "some text")
+				result := gplog.FormatStackTrace(err)
+				Expect(result).To(ContainSubstring("ginkgo_dsl.go"))
+				Expect(result).To(ContainSubstring("gplog_test.go"))
+
+			})
+			It("does not return unnecessary traces in the stack", func() {
+				cause := errors.New("some error")
+				err := errors.Wrap(cause, "some text")
+				result := gplog.FormatStackTrace(err)
+				Expect(result).To(Not(ContainSubstring("runtime.goexit")))
+
+			})
+		})
 		Describe("Verbosity set to Error", func() {
 			BeforeEach(func() {
 				gplog.SetVerbosity(gplog.LOGERROR)

@@ -237,7 +237,7 @@ func Fatal(err error, s string, v ...interface{}) {
 	stackTraceStr := ""
 	if err != nil {
 		message += fmt.Sprintf("%v", err)
-		stackTraceStr = formatStackTrace(errors.WithStack(err))
+		stackTraceStr = FormatStackTrace(errors.WithStack(err))
 		if s != "" {
 			message += ": "
 		}
@@ -265,9 +265,24 @@ type stackTracer interface {
 	StackTrace() errors.StackTrace
 }
 
-func formatStackTrace(err error) string {
-	st := err.(stackTracer).StackTrace()
-	message := fmt.Sprintf("%+v", st[1:len(st)-2])
+func FormatStackTrace(err error) string {
+	var filteredStackTrace errors.StackTrace
+	stackTraceToSkip := []string{"cobra/command.go", "runtime.main", "runtime.goexit"}
+
+	stackTrace := err.(stackTracer).StackTrace()
+	for _, trace := range stackTrace {
+		printTrace := true
+		for _, filterString := range stackTraceToSkip {
+			if strings.Contains(fmt.Sprintf("%+v", trace), filterString) {
+				printTrace = false
+				break
+			}
+		}
+		if printTrace {
+			filteredStackTrace = append(filteredStackTrace, trace)
+		}
+	}
+	message := fmt.Sprintf("%+v", filteredStackTrace[1:])
 	return message
 }
 
