@@ -41,6 +41,12 @@ var _ = BeforeEach(func() {
 	connection, mock = testhelper.CreateAndConnectMockDB(1)
 })
 
+var _ = AfterEach(func() {
+	if connection != nil {
+		connection.Close()
+	}
+})
+
 var _ = Describe("dbconn/dbconn tests", func() {
 	BeforeEach(func() {
 		operating.System.Now = func() time.Time { return time.Date(2017, time.January, 1, 1, 1, 1, 1, time.Local) }
@@ -73,17 +79,8 @@ var _ = Describe("dbconn/dbconn tests", func() {
 	Describe("DBConn.MustConnect", func() {
 		var mockdb *sqlx.DB
 		BeforeEach(func() {
-			mockdb, mock = testhelper.CreateMockDB()
-			if connection != nil {
-				connection.Close()
-			}
-			connection = dbconn.NewDBConnFromEnvironment("testdb")
-			connection.Driver = testhelper.TestDriver{DB: mockdb, User: "testrole"}
-		})
-		AfterEach(func() {
-			if connection != nil {
-				connection.Close()
-			}
+			connection, mock = testhelper.CreateMockDBConn()
+			testhelper.ExpectVersionQuery(mock, "5.1.0")
 		})
 		It("makes a single connection successfully if the database exists", func() {
 			connection.MustConnect(1)
@@ -127,11 +124,9 @@ var _ = Describe("dbconn/dbconn tests", func() {
 		})
 	})
 	Describe("DBConn.Close", func() {
-		var mockdb *sqlx.DB
 		BeforeEach(func() {
-			mockdb, mock = testhelper.CreateMockDB()
-			connection = dbconn.NewDBConnFromEnvironment("testdb")
-			connection.Driver = testhelper.TestDriver{DB: mockdb, User: "testrole"}
+			connection, mock = testhelper.CreateMockDBConn()
+			testhelper.ExpectVersionQuery(mock, "5.1.0")
 		})
 		It("successfully closes a dbconn with a single open connection", func() {
 			connection.MustConnect(1)
@@ -337,11 +332,9 @@ var _ = Describe("dbconn/dbconn tests", func() {
 	})
 	Describe("Dbconn.ValidateConnNum", func() {
 		BeforeEach(func() {
-			connection.Close()
+			connection, mock = testhelper.CreateMockDBConn()
+			testhelper.ExpectVersionQuery(mock, "5.1.0")
 			connection.MustConnect(3)
-		})
-		AfterEach(func() {
-			connection.Close()
 		})
 		It("returns the connection number if it is valid", func() {
 			num := connection.ValidateConnNum(1)

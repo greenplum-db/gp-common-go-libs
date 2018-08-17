@@ -208,6 +208,11 @@ func (dbconn *DBConn) Connect(numConns int) error {
 	}
 	dbconn.Tx = make([]*sqlx.Tx, numConns)
 	dbconn.NumConns = numConns
+	version, err := InitializeVersion(dbconn)
+	if err != nil {
+		return errors.Wrap(err, "Failed to determine database version")
+	}
+	dbconn.Version = version
 	return nil
 }
 
