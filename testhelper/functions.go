@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/blang/semver"
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
@@ -46,17 +45,33 @@ func CreateMockDB() (*sqlx.DB, sqlmock.Sqlmock) {
 	return mockdb, mock
 }
 
+/*
+ * While this function is technically redundant with dbconn.NewVersion, it's
+ * here to allow `defer`ing version changes easily, instead of needing e.g.
+ * "defer func() { connection.Version = dbconn.NewVersion(versionStr) }()" or
+ * something similarly ugly.
+ */
 func SetDBVersion(connection *dbconn.DBConn, versionStr string) {
-	connection.Version = dbconn.GPDBVersion{VersionString: versionStr, SemVer: semver.MustParse(versionStr)}
+	connection.Version = dbconn.NewVersion(versionStr)
 }
 
-func CreateAndConnectMockDB(numConns int) (*dbconn.DBConn, sqlmock.Sqlmock) {
+func CreateMockDBConn() (*dbconn.DBConn, sqlmock.Sqlmock) {
 	mockdb, mock := CreateMockDB()
 	driver := TestDriver{DB: mockdb, DBName: "testdb", User: "testrole"}
 	connection := dbconn.NewDBConnFromEnvironment("testdb")
 	connection.Driver = driver
+	return connection, mock
+}
+
+func ExpectVersionQuery(mock sqlmock.Sqlmock, versionStr string) {
+	versionRow := sqlmock.NewRows([]string{"versionstring"}).AddRow(fmt.Sprintf("(Greenplum Database %s)", versionStr))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT version() AS versionstring")).WillReturnRows(versionRow)
+}
+
+func CreateAndConnectMockDB(numConns int) (*dbconn.DBConn, sqlmock.Sqlmock) {
+	connection, mock := CreateMockDBConn()
+	ExpectVersionQuery(mock, "5.1.0")
 	connection.MustConnect(numConns)
-	SetDBVersion(connection, "5.1.0")
 	return connection, mock
 }
 

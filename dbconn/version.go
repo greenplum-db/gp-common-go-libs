@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/blang/semver"
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
 )
 
 type GPDBVersion struct {
@@ -13,9 +12,29 @@ type GPDBVersion struct {
 	SemVer        semver.Version
 }
 
-func (dbversion *GPDBVersion) Initialize(dbconn *DBConn) {
-	err := dbconn.Get(dbversion, "SELECT version() AS versionstring")
-	gplog.FatalOnError(err)
+/*
+ * This constructor is intended as a convenience function for testing and
+ * setting defaults; the dbconn.Connect function will automatically initialize
+ * the version of the database to which it is connecting.
+ *
+ * The versionStr argument here should be a semantic version in the form X.Y.Z,
+ * not a GPDB version string like the one returned by "SELECT version()".  If
+ * an invalid semantic version is passed, that is considered programmer error
+ * and the function will panic.
+ */
+func NewVersion(versionStr string) GPDBVersion {
+	version := GPDBVersion{
+		VersionString: versionStr,
+		SemVer:        semver.MustParse(versionStr),
+	}
+	return version
+}
+
+func InitializeVersion(dbconn *DBConn) (dbversion GPDBVersion, err error) {
+	err = dbconn.Get(&dbversion, "SELECT version() AS versionstring")
+	if err != nil {
+		return
+	}
 	versionStart := strings.Index(dbversion.VersionString, "(Greenplum Database ") + len("(Greenplum Database ")
 	versionEnd := strings.Index(dbversion.VersionString, ")")
 	dbversion.VersionString = dbversion.VersionString[versionStart:versionEnd]
@@ -23,7 +42,7 @@ func (dbversion *GPDBVersion) Initialize(dbconn *DBConn) {
 	pattern := regexp.MustCompile(`\d+\.\d+\.\d+`)
 	threeDigitVersion := pattern.FindStringSubmatch(dbversion.VersionString)[0]
 	dbversion.SemVer, err = semver.Make(threeDigitVersion)
-	gplog.FatalOnError(err)
+	return
 }
 
 func StringToSemVerRange(versionStr string) semver.Range {
