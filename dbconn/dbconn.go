@@ -13,6 +13,7 @@ import (
 
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
+
 	/*
 	 * We previously used github.com/lib/pq as our Postgres driver,
 	 * but it had a bug with the way it handled certain encodings.
@@ -283,6 +284,21 @@ func (dbconn *DBConn) Select(destination interface{}, query string, whichConn ..
 	return dbconn.ConnPool[connNum].Select(destination, query)
 }
 
+func (dbconn *DBConn) QueryWithArgs(query string, args ...interface{}) (*sqlx.Rows, error) {
+	if dbconn.Tx[0] != nil {
+		return dbconn.Tx[0].Queryx(query, args...)
+	}
+	return dbconn.ConnPool[0].Queryx(query, args...)
+}
+
+func (dbconn *DBConn) Query(query string, whichConn ...int) (*sqlx.Rows, error) {
+	connNum := dbconn.ValidateConnNum(whichConn...)
+	if dbconn.Tx[connNum] != nil {
+		return dbconn.Tx[connNum].Queryx(query)
+	}
+	return dbconn.ConnPool[connNum].Queryx(query)
+}
+
 /*
  * Ensure there isn't a mismatch between the connection pool size and number of
  * jobs, and default to using the first connection if no number is given.
@@ -359,7 +375,7 @@ func MustSelectStringSlice(connection *DBConn, query string, whichConn ...int) [
 
 func SelectStringSlice(connection *DBConn, query string, whichConn ...int) ([]string, error) {
 	connNum := connection.ValidateConnNum(whichConn...)
-	rows, err := connection.ConnPool[connNum].Queryx(query)
+	rows, err := connection.Query(query, connNum)
 	if err != nil {
 		return []string{}, err
 	}
