@@ -237,7 +237,7 @@ func Fatal(err error, s string, v ...interface{}) {
 	stackTraceStr := ""
 	if err != nil {
 		message += fmt.Sprintf("%v", err)
-		stackTraceStr = fmt.Sprintf("%+v", errors.WithStack(err))
+		stackTraceStr = formatStackTrace(errors.WithStack(err))
 		if s != "" {
 			message += ": "
 		}
@@ -259,6 +259,16 @@ func FatalOnError(err error, output ...string) {
 			Fatal(err, output[0])
 		}
 	}
+}
+
+type stackTracer interface {
+	StackTrace() errors.StackTrace
+}
+
+func formatStackTrace(err error) string {
+	st := err.(stackTracer).StackTrace()
+	message := fmt.Sprintf("%+v", st[1:])
+	return message
 }
 
 /*

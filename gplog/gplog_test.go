@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -338,6 +339,7 @@ var _ = Describe("logger/log tests", func() {
 						testhelper.NotExpectRegexp(stdout, fatalExpected+expectedMessage)
 						testhelper.NotExpectRegexp(stderr, fatalExpected+expectedMessage)
 						testhelper.ExpectRegexp(logfile, fatalExpected+expectedMessage)
+						Expect(strings.Count(fmt.Sprintf("%s", logfile), expectedMessage)).To(Equal(1))
 					}()
 					defer testhelper.ShouldPanicWithMessage(expectedMessage)
 					gplog.Fatal(errors.New(expectedMessage), "")
