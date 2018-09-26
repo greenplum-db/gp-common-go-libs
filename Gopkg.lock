@@ -2,35 +2,37 @@
 
 
 [[projects]]
+  digest = "1:705c40022f5c03bf96ffeb6477858d88565064485a513abcd0f11a0911546cb6"
   name = "github.com/blang/semver"
   packages = ["."]
+  pruneopts = "UT"
   revision = "2ee87856327ba09384cabd113bc6b5d174e9ec0f"
   version = "v3.5.1"
 
 [[projects]]
-  name = "github.com/jackc/pgx"
+  digest = "1:e00bfd00a52c601532de37c52a769661f3413f2f914aab980260336be319c8ad"
+  name = "github.com/greenplum-db/gp-golang-libpq"
   packages = [
-    ".",
-    "chunkreader",
-    "internal/sanitize",
-    "pgio",
-    "pgproto3",
-    "pgtype",
-    "stdlib"
+    "gssapi",
+    "pq",
+    "pq/oid",
   ]
-  revision = "da3231b0b66e2e74cdb779f1d46c5e958ba8be27"
-  version = "v3.1.0"
+  pruneopts = "UT"
+  revision = "38ef0170f233e0c5d68ec8323798790a82bf88a1"
 
 [[projects]]
   branch = "master"
+  digest = "1:7654989089e5bd5b6734ec3be8b695e87d3f1f8d95620b343fd7d3995a5b60d7"
   name = "github.com/jmoiron/sqlx"
   packages = [
     ".",
-    "reflectx"
+    "reflectx",
   ]
+  pruneopts = "UT"
   revision = "0dae4fefe7c0e190f7b5a78dac28a1c82cc8d849"
 
 [[projects]]
+  digest = "1:a07caa164b5a159fd3aa419a82ce0eadaff55a7aef202e62253f2fc927cbee1f"
   name = "github.com/onsi/ginkgo"
   packages = [
     ".",
@@ -57,12 +59,14 @@
     "reporters/stenographer",
     "reporters/stenographer/support/go-colorable",
     "reporters/stenographer/support/go-isatty",
-    "types"
+    "types",
   ]
+  pruneopts = "UT"
   revision = "fa5fabab2a1bfbd924faf4c067d07ae414e2aedf"
   version = "v1.5.0"
 
 [[projects]]
+  digest = "1:6dbefa9e10dcde4ab246ffacb88073ef979bd9c195fd36480f60c7dc0ffa5ca2"
   name = "github.com/onsi/gomega"
   packages = [
     ".",
@@ -77,34 +81,42 @@
     "matchers/support/goraph/edge",
     "matchers/support/goraph/node",
     "matchers/support/goraph/util",
-    "types"
+    "types",
   ]
+  pruneopts = "UT"
   revision = "62bff4df71bdbc266561a0caee19f0594b17c240"
   version = "v1.4.0"
 
 [[projects]]
+  digest = "1:40e195917a951a8bf867cd05de2a46aaf1806c50cf92eebf4c16f78cd196f747"
   name = "github.com/pkg/errors"
   packages = ["."]
+  pruneopts = "UT"
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
 
 [[projects]]
   branch = "master"
+  digest = "1:c8678feb43230c4aabd02a59d175235875b34741a915261f7eadd0a0a550a384"
   name = "golang.org/x/net"
   packages = [
     "html",
     "html/atom",
-    "html/charset"
+    "html/charset",
   ]
+  pruneopts = "UT"
   revision = "d0887baf81f4598189d4e12a37c6da86f0bba4d0"
 
 [[projects]]
   branch = "master"
+  digest = "1:d773e525476aefa22ea944a5425a9bfb99819b2e67eeb9b1966454fd57522bbf"
   name = "golang.org/x/sys"
   packages = ["unix"]
+  pruneopts = "UT"
   revision = "ac767d655b305d4e9612f5f6e33120b9176c4ad4"
 
 [[projects]]
+  digest = "1:aa4d6967a3237f8367b6bf91503964a77183ecf696f1273e8ad3551bb4412b5f"
   name = "golang.org/x/text"
   packages = [
     "encoding",
@@ -123,37 +135,55 @@
     "language",
     "runes",
     "transform",
-    "unicode/cldr"
+    "unicode/cldr",
   ]
+  pruneopts = "UT"
   revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
   version = "v0.3.0"
 
 [[projects]]
   branch = "master"
+  digest = "1:a50d2e614dc8117192449faf8f34b4fb0ba4b80fe98df6d7296eb072db0850ef"
   name = "golang.org/x/tools"
   packages = [
     "cmd/goimports",
     "go/ast/astutil",
     "imports",
-    "internal/fastwalk"
+    "internal/fastwalk",
   ]
+  pruneopts = "UT"
   revision = "fd2d2c45eb2dff7b87eab4303a1016b4dbf95e81"
 
 [[projects]]
+  digest = "1:04aea75705cb453e24bf8c1506a24a5a9036537dbc61ddf71d20900d6c7c3ab9"
   name = "gopkg.in/DATA-DOG/go-sqlmock.v1"
   packages = ["."]
+  pruneopts = "UT"
   revision = "d76b18b42f285b792bf985118980ce9eacea9d10"
   version = "v1.3.0"
 
 [[projects]]
+  digest = "1:342378ac4dcb378a5448dd723f0784ae519383532f5e70ade24132c4c8693202"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
+  pruneopts = "UT"
   revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
   version = "v2.2.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0340820206c151a83a88eaf3a46fb60f1c418d7fc950949ec07dfdd606bec594"
+  input-imports = [
+    "github.com/blang/semver",
+    "github.com/greenplum-db/gp-golang-libpq/pq",
+    "github.com/jmoiron/sqlx",
+    "github.com/onsi/ginkgo",
+    "github.com/onsi/ginkgo/ginkgo",
+    "github.com/onsi/gomega",
+    "github.com/onsi/gomega/gbytes",
+    "github.com/pkg/errors",
+    "golang.org/x/tools/cmd/goimports",
+    "gopkg.in/DATA-DOG/go-sqlmock.v1",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1
