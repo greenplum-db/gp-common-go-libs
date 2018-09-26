@@ -1,3 +1,4 @@
-# gp-common-go-libs [![Concourse Build Status](https://prod.ci.gpdb.pivotal.io/api/v1/teams/main/pipelines/gp-common-go-libs/badge)] 
+# gp-common-go-libs
 
-Pipeline lives [here](https://prod.ci.gpdb.pivotal.io/teams/main/pipelines/gp-common-go-libs)
+This is the kerberos supported branch. Please don't remove, we have products
+relying on this, thanks.
