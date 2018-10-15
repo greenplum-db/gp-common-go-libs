@@ -60,6 +60,8 @@ func CreateMockDBConn() (*dbconn.DBConn, sqlmock.Sqlmock) {
 	driver := TestDriver{DB: mockdb, DBName: "testdb", User: "testrole"}
 	connection := dbconn.NewDBConnFromEnvironment("testdb")
 	connection.Driver = driver
+	connection.Host = "testhost"
+	connection.Port = 5432
 	return connection, mock
 }
 

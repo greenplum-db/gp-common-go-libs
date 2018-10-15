@@ -221,16 +221,19 @@ func (dbconn *DBConn) handleConnectionError(err error) error {
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
 			if strings.Contains(err.Error(), "pq: role") {
-				return errors.Errorf(`Role "%s" does not exist, exiting`, dbconn.User)
+				return errors.Errorf(`Role "%s" does not exist on %s:%d, exiting`, dbconn.User, dbconn.Host, dbconn.Port)
 			} else if strings.Contains(err.Error(), "pq: database") {
-				return errors.Errorf(`Database "%s" does not exist, exiting`, dbconn.DBName)
+				return errors.Errorf(`Database "%s" does not exist on %s:%d, exiting`, dbconn.DBName, dbconn.Host, dbconn.Port)
 			}
 		} else if strings.Contains(err.Error(), "connection refused") {
 			return errors.Errorf(`could not connect to server: Connection refused
 	Is the server running on host "%s" and accepting
 	TCP/IP connections on port %d?`, dbconn.Host, dbconn.Port)
+		} else {
+			return errors.Errorf("%v (%s:%d)", err, dbconn.Host, dbconn.Port)
 		}
 	}
+
 	return err
 }
 
