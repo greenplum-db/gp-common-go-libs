@@ -108,7 +108,7 @@ var _ = Describe("dbconn/dbconn tests", func() {
 		It("fails if the database does not exist", func() {
 			connection.Driver = testhelper.TestDriver{ErrToReturn: fmt.Errorf("pq: database \"testdb\" does not exist"), DB: mockdb, DBName: "testdb", User: "testrole"}
 			Expect(connection.DBName).To(Equal("testdb"))
-			defer testhelper.ShouldPanicWithMessage("Database \"testdb\" does not exist, exiting")
+			defer testhelper.ShouldPanicWithMessage("Database \"testdb\" does not exist on testhost:5432, exiting")
 			connection.MustConnect(1)
 		})
 		It("fails if the role does not exist", func() {
@@ -119,7 +119,8 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			connection = dbconn.NewDBConnFromEnvironment("testdb")
 			connection.Driver = testhelper.TestDriver{ErrToReturn: fmt.Errorf("pq: role \"nonexistent\" does not exist"), DB: mockdb, DBName: "testdb", User: "nonexistent"}
 			Expect(connection.User).To(Equal("nonexistent"))
-			defer testhelper.ShouldPanicWithMessage("Role \"nonexistent\" does not exist, exiting")
+			expectedStr := fmt.Sprintf("Role \"nonexistent\" does not exist on %s:%d, exiting", connection.Host, connection.Port)
+			defer testhelper.ShouldPanicWithMessage(expectedStr)
 			connection.MustConnect(1)
 		})
 	})
