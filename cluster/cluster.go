@@ -22,7 +22,7 @@ type Executor interface {
 	ExecuteClusterCommand(scope int, commandMap map[int][]string) *RemoteOutput
 }
 
-// This type only exists to allow us to mock Execute[...]Command functions for testing
+// GPDBExecutor only exists to allow us to mock Execute[...]Command functions for testing
 type GPDBExecutor struct{}
 
 type Cluster struct {
@@ -52,6 +52,17 @@ const (
 	ON_SEGMENTS_AND_MASTER
 	ON_HOSTS
 	ON_HOSTS_AND_MASTER
+)
+
+/*
+ * We pass values from this enum into GenerateAndExecuteCopy to define the
+ * scope for remote command execution.
+ * - TO_SEGMENTS: Copy files from specified path on master to segments.
+ * - FROM_SEGMENTS: Copy files from specified path on segments to master.
+ */
+const (
+	TO_SEGMENTS = iota
+	FROM_SEGMENTS
 )
 
 type RemoteOutput struct {
@@ -86,6 +97,22 @@ func (cluster *Cluster) GenerateSegmentSSHCommand(contentID int, generateCommand
 	return ConstructSSHCommand(cluster.GetHostForContent(contentID), cmdStr)
 }
 
+func (cluster *Cluster) GenerateSegmentCopyCommand(contentID int, masterPathFunc func(int) string, segPathFunc func(int) string, direction int) ([]string, error) {
+	masterHost, _ := operating.System.Hostname()
+	var cmd []string
+	var err error
+	switch direction {
+	case FROM_SEGMENTS:
+		cmd, err = ConstructCopyCommand(cluster.GetHostForContent(contentID), segPathFunc(contentID), masterHost, masterPathFunc(contentID))
+	case TO_SEGMENTS:
+		cmd, err = ConstructCopyCommand(masterHost, masterPathFunc(contentID), cluster.GetHostForContent(contentID), segPathFunc(contentID))
+	}
+	if err != nil {
+		return nil, err
+	}
+	return cmd, nil
+}
+
 func (cluster *Cluster) GenerateSSHCommandMapForSegments(includeMaster bool, generateCommand func(int) string) map[int][]string {
 	commandMap := make(map[int][]string, len(cluster.ContentIDs))
 	for _, contentID := range cluster.ContentIDs {
@@ -115,6 +142,45 @@ func (cluster *Cluster) GenerateSSHCommandMapForHosts(includeMaster bool, genera
 		commands[contentID] = cluster.GenerateSegmentSSHCommand(contentID, generateCommand)
 	}
 	return commands
+}
+
+func (cluster *Cluster) GenerateCopyCommandMapForSegments(masterPathFunc func(int) string, segPathFunc func(int) string, direction int) (map[int][]string, error) {
+	commandMap := make(map[int][]string, len(cluster.ContentIDs)-1)
+	var err error
+	for _, contentID := range cluster.ContentIDs {
+		if contentID == -1 {
+			continue
+		}
+		commandMap[contentID], err = cluster.GenerateSegmentCopyCommand(contentID, masterPathFunc, segPathFunc, direction)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return commandMap, nil
+}
+
+func (cluster *Cluster) GenerateCopyCommandMapForHosts(masterPathFunc func(int) string, segPathFunc func(int) string, direction int) (map[int][]string, error) {
+	/*
+	 * Derive a list of unique hosts from the cluster and then generate commands
+	 * for each.  If includeMaster is false but there are segments on the master
+	 * host, such as for a single-node cluster, the master host will be included.
+	 */
+	hostSegMap := make(map[string]int, 0)
+	var err error
+	for contentID, seg := range cluster.Segments {
+		if contentID == -1 {
+			continue
+		}
+		hostSegMap[seg.Hostname] = contentID
+	}
+	commands := make(map[int][]string, 0)
+	for _, contentID := range hostSegMap {
+		commands[contentID], err = cluster.GenerateSegmentCopyCommand(contentID, masterPathFunc, segPathFunc, direction)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return commands, nil
 }
 
 func (executor *GPDBExecutor) ExecuteLocalCommand(commandStr string) (string, error) {
@@ -188,6 +254,29 @@ func (cluster *Cluster) GenerateAndExecuteCommand(verboseMsg string, execFunc fu
 	default:
 		// If we ever get to this case, it's programmer error, not user error.
 		gplog.Fatal(fmt.Errorf("Invalid remote execution scope for command to %s: %d", strings.ToLower(verboseMsg), scope), "")
+	}
+
+	return cluster.ExecuteClusterCommand(scope, commandMap)
+}
+
+func (cluster *Cluster) GenerateAndExecuteCopy(verboseMsg string, masterPathFunc func(contentID int) string, segPathFunc func(contentID int) string, direction int, scope int) *RemoteOutput {
+	gplog.Verbose(verboseMsg)
+	var commandMap map[int][]string
+	var err error
+	switch scope {
+	case ON_SEGMENTS, ON_SEGMENTS_AND_MASTER:
+		scope = ON_SEGMENTS
+		commandMap, err = cluster.GenerateCopyCommandMapForSegments(masterPathFunc, segPathFunc, direction)
+	case ON_HOSTS, ON_HOSTS_AND_MASTER:
+		scope = ON_HOSTS
+		commandMap, err = cluster.GenerateCopyCommandMapForHosts(masterPathFunc, segPathFunc, direction)
+	default:
+		// If we ever get to this case, it's programmer error, not user error.
+		gplog.Fatal(fmt.Errorf("Invalid remote execution scope for command to %s: %d", strings.ToLower(verboseMsg), scope), "")
+	}
+
+	if err != nil {
+		gplog.Fatal(err, "")
 	}
 
 	return cluster.ExecuteClusterCommand(scope, commandMap)
@@ -296,4 +385,17 @@ func ConstructSSHCommand(host string, cmd string) []string {
 	currentUser, _ := operating.System.CurrentUser()
 	user := currentUser.Username
 	return []string{"ssh", "-o", "StrictHostKeyChecking=no", fmt.Sprintf("%s@%s", user, host), cmd}
+}
+
+func ConstructCopyCommand(srcHost string, srcPath string, targetHost string, targetPath string) ([]string, error) {
+	currentUser, _ := operating.System.CurrentUser()
+	currentHost, _ := operating.System.Hostname()
+	user := currentUser.Username
+	if targetHost != currentHost {
+		if srcHost != currentHost {
+			return nil, errors.New("Cannot copy between two remote servers")
+		}
+		return []string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", srcPath, fmt.Sprintf("%s@%s:%s", user, targetHost, targetPath)}, nil
+	}
+	return []string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", fmt.Sprintf("%s@%s:%s", user, srcHost, srcPath), targetPath}, nil
 }

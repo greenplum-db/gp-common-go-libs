@@ -63,6 +63,20 @@ var _ = Describe("cluster/cluster tests", func() {
 		testCluster = cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, remoteSegOne})
 		testCluster.Executor = testExecutor
 	})
+	Describe("ConstructCopyCommand", func() {
+		It("constructs a copy-to-remote src command", func() {
+			cmd, _ := cluster.ConstructCopyCommand("testHost", "srcPath", "targetHost", "targetPath")
+			Expect(cmd).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "srcPath", "testUser@targetHost:targetPath"}))
+		})
+		It("constructs a copy-from-remote src command", func() {
+			cmd, _ := cluster.ConstructCopyCommand("srcHost", "srcPath", "testHost", "targetPath")
+			Expect(cmd).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "testUser@srcHost:srcPath", "targetPath"}))
+		})
+		It("constructs a copy-from-remote src command", func() {
+			_, err := cluster.ConstructCopyCommand("srcHost", "srcPath", "targetHost", "targetPath")
+			Expect(err.Error()).To(Equal("Cannot copy between two remote servers"))
+		})
+	})
 	Describe("ConstructSSHCommand", func() {
 		It("constructs an ssh command", func() {
 			cmd := cluster.ConstructSSHCommand("some-host", "ls")
@@ -246,6 +260,103 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "echo 0"}))
 			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "echo 1"}))
 			Expect(commandMap[3]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 3"}))
+		})
+	})
+	Describe("GenerateCopyCommandMapForSegments", func() {
+		It("Excludes master", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg})
+			commandMap, _ := testCluster.GenerateCopyCommandMapForSegments(func(_ int) string {
+				return "/home/gpadmin/dir1"
+			}, func(_ int) string {
+				return "/home/gpadmin/dir1"
+			}, cluster.TO_SEGMENTS)
+			Expect(len(commandMap)).To(Equal(0))
+		})
+		It("Returns a map of copy commands to one segment", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{remoteSegOne})
+			commandMap, _ := testCluster.GenerateCopyCommandMapForSegments(func(_ int) string {
+				return "dirOnMaster"
+			}, func(_ int) string {
+				return "dirOnSegment"
+			}, cluster.TO_SEGMENTS)
+			Expect(len(commandMap)).To(Equal(1))
+			Expect(commandMap[1]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "dirOnMaster", "testUser@remotehost1:dirOnSegment"}))
+		})
+		It("Returns a map of copy commands from one segment", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{remoteSegOne})
+			commandMap, _ := testCluster.GenerateCopyCommandMapForSegments(func(_ int) string {
+				return "dirOnMaster"
+			}, func(_ int) string {
+				return "dirOnSegment"
+			}, cluster.FROM_SEGMENTS)
+			Expect(len(commandMap)).To(Equal(1))
+			Expect(commandMap[1]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "testUser@remotehost1:dirOnSegment", "dirOnMaster"}))
+		})
+		It("Returns a map of copy commands for two segments on the same host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{localSegOne, localSegTwo})
+			commandMap, _ := testCluster.GenerateCopyCommandMapForSegments(func(contentID int) string {
+				return fmt.Sprintf("dirOnMaster%d", contentID)
+			}, func(contentID int) string {
+				return fmt.Sprintf("dirOnSegment%d", contentID)
+			}, cluster.TO_SEGMENTS)
+			Expect(len(commandMap)).To(Equal(2))
+			Expect(commandMap[0]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "dirOnMaster0", "testUser@localhost:dirOnSegment0"}))
+			Expect(commandMap[2]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "dirOnMaster2", "testUser@localhost:dirOnSegment2"}))
+		})
+		It("Returns a map of copy commands for three segments on different hosts", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{localSegOne, remoteSegOne, remoteSegTwo})
+			commandMap, _ := testCluster.GenerateCopyCommandMapForSegments(func(contentID int) string {
+				return fmt.Sprintf("dirOnMaster%d", contentID)
+			}, func(contentID int) string {
+				return fmt.Sprintf("dirOnSegment%d", contentID)
+			}, cluster.FROM_SEGMENTS)
+			Expect(len(commandMap)).To(Equal(3))
+			Expect(commandMap[0]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "testUser@localhost:dirOnSegment0", "dirOnMaster0"}))
+			Expect(commandMap[1]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "testUser@remotehost1:dirOnSegment1", "dirOnMaster1"}))
+			Expect(commandMap[3]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "testUser@remotehost2:dirOnSegment3", "dirOnMaster3"}))
+		})
+	})
+	Describe("GenerateCopyCommandMapForHosts", func() {
+		It("Excludes the master host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg})
+			commandMap, _ := testCluster.GenerateCopyCommandMapForHosts(func(_ int) string {
+				return "dirOnMaster"
+			}, func(_ int) string {
+				return "dirOnSegment"
+			}, cluster.FROM_SEGMENTS)
+			Expect(len(commandMap)).To(Equal(0))
+		})
+		It("Returns a map of copy commands to one host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne})
+			commandMap, _ := testCluster.GenerateCopyCommandMapForHosts(func(_ int) string {
+				return "dirOnMaster"
+			}, func(_ int) string {
+				return "dirOnSegment"
+			}, cluster.TO_SEGMENTS)
+			Expect(len(commandMap)).To(Equal(1))
+			Expect(commandMap[0]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "dirOnMaster", "testUser@localhost:dirOnSegment"}))
+		})
+		It("Returns a map of copy commands to two segments on one host", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, localSegTwo})
+			commandMap, _ := testCluster.GenerateCopyCommandMapForHosts(func(_ int) string {
+				return "dirOnMaster"
+			}, func(_ int) string {
+				return "dirOnSegment"
+			}, cluster.TO_SEGMENTS)
+			Expect(len(commandMap)).To(Equal(1))
+			Expect(commandMap[2]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "dirOnMaster", "testUser@localhost:dirOnSegment"}))
+		})
+		It("Returns a map of ssh commands from one local host and two remote hosts", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, remoteSegOne, remoteSegTwo})
+			commandMap, _ := testCluster.GenerateCopyCommandMapForHosts(func(_ int) string {
+				return "dirOnMaster"
+			}, func(_ int) string {
+				return "dirOnSegment"
+			}, cluster.FROM_SEGMENTS)
+			Expect(len(commandMap)).To(Equal(3))
+			Expect(commandMap[0]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "testUser@localhost:dirOnSegment", "dirOnMaster"}))
+			Expect(commandMap[1]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "testUser@remotehost1:dirOnSegment", "dirOnMaster"}))
+			Expect(commandMap[3]).To(Equal([]string{"rsync", "-az", "ssh -o StrictHostKeyChecking=no", "testUser@remotehost2:dirOnSegment", "dirOnMaster"}))
 		})
 	})
 	Describe("ExecuteLocalCommand", func() {
