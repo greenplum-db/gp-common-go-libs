@@ -39,6 +39,7 @@ type DBConn struct {
 	NumConns int
 	Driver   DBDriver
 	User     string
+	Password string
 	DBName   string
 	Host     string
 	Port     int
@@ -84,10 +85,12 @@ func NewDBConnFromEnvironment(dbname string) *DBConn {
 		port = 5432
 	}
 
-	return NewDBConn(dbname, username, host, port)
+	password := operating.System.Getenv("PGPASSWORD")
+
+	return NewDBConn(dbname, username, password, host, port)
 }
 
-func NewDBConn(dbname, username, host string, port int) *DBConn {
+func NewDBConn(dbname, username, password, host string, port int) *DBConn {
 	if dbname == "" {
 		gplog.Fatal(errors.New("No database provided"), "")
 	}
@@ -105,6 +108,7 @@ func NewDBConn(dbname, username, host string, port int) *DBConn {
 		NumConns: 0,
 		Driver:   GPDBDriver{},
 		User:     username,
+		Password: password,
 		DBName:   dbname,
 		Host:     host,
 		Port:     port,
@@ -189,7 +193,14 @@ func (dbconn *DBConn) Connect(numConns int) error {
 	}
 	dbname := EscapeConnectionParam(dbconn.DBName)
 	user := EscapeConnectionParam(dbconn.User)
-	connStr := fmt.Sprintf(`user='%s' dbname='%s' host=%s port=%d sslmode=disable`, user, dbname, dbconn.Host, dbconn.Port)
+	pass := EscapeConnectionParam(dbconn.Password)
+	var connStr string
+	if pass == "" {
+		connStr = fmt.Sprintf(`user='%s' dbname='%s' host=%s port=%d sslmode=disable`, user, dbname, dbconn.Host, dbconn.Port)
+	} else {
+		connStr = fmt.Sprintf(`user='%s' password='%s' dbname='%s' host=%s port=%d sslmode=disable`, user, pass, dbname, dbconn.Host, dbconn.Port)
+	}
+
 	dbconn.ConnPool = make([]*sqlx.DB, numConns)
 	for i := 0; i < numConns; i++ {
 		conn, err := dbconn.Driver.Connect("postgres", connStr)
