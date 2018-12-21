@@ -57,12 +57,12 @@ const (
 /*
  * We pass values from this enum into GenerateAndExecuteCopy to define the
  * scope for remote command execution.
- * - TO_SEGMENTS: Copy files from specified path on master to segments.
- * - FROM_SEGMENTS: Copy files from specified path on segments to master.
+ * - FROM_MASTER: Copy files from specified path on master to segments.
+ * - TO_MASTER: Copy files from specified path on segments to master.
  */
 const (
-	TO_SEGMENTS = iota
-	FROM_SEGMENTS
+	TO_MASTER = iota
+	FROM_MASTER
 )
 
 type RemoteOutput struct {
@@ -89,23 +89,102 @@ func NewCluster(segConfigs []SegConfig) *Cluster {
 	return &cluster
 }
 
-func (cluster *Cluster) GenerateSegmentSSHCommand(contentID int, generateCommand func(int) string) []string {
-	cmdStr := generateCommand(contentID)
-	if contentID == -1 {
-		return []string{"bash", "-c", cmdStr}
-	}
-	return ConstructSSHCommand(cluster.GetHostForContent(contentID), cmdStr)
+const (
+	COPY = iota
+	SSH
+)
+
+type Commands interface {
+	GenerateCopyCommand(*Cluster, int) error
+	GenerateSSHCommand(*Cluster, int) error
+	GetCommandType() int
+	GetCommands() map[int][]string
+	GetDirection() int
+	GetScope() int
 }
 
-func (cluster *Cluster) GenerateSegmentCopyCommand(contentID int, masterPathFunc func(int) string, segPathFunc func(int) string, direction int) ([]string, error) {
-	masterHost, _ := operating.System.Hostname()
-	var cmd []string
+type HostCommands struct {
+	Commands    map[int][]string
+	Hostnames   map[string]int
+	MasterPath  func(string) string
+	RemotePath  func(string) string
+	SSHCommand  func(string) string
+	Direction   int
+	Scope       int
+	CommandType int
+}
+
+type SegmentCommands struct {
+	Commands    map[int][]string
+	MasterPath  func(int) string
+	RemotePath  func(int) string
+	SSHCommand  func(int) string
+	Direction   int
+	Scope       int
+	CommandType int
+}
+
+func (h *HostCommands) GetScope() int {
+	return h.Scope
+}
+
+func (s *SegmentCommands) GetScope() int {
+	return s.Scope
+}
+
+func (h *HostCommands) GetCommandType() int {
+	return h.CommandType
+}
+
+func (s *SegmentCommands) GetCommandType() int {
+	return s.CommandType
+}
+
+func (h *HostCommands) GetCommands() map[int][]string {
+	return h.Commands
+}
+
+func (s *SegmentCommands) GetCommands() map[int][]string {
+	return s.Commands
+}
+
+func (h *HostCommands) GetDirection() int {
+	return h.Direction
+}
+
+func (s *SegmentCommands) GetDirection() int {
+	return s.Direction
+}
+
+func (h *HostCommands) GenerateCopyCommand(cluster *Cluster, contentID int) error {
+	contentHost := cluster.GetHostForContent(contentID)
+	h.Hostnames[contentHost]++
+	if h.Hostnames[contentHost] > 1 {
+		return nil
+	}
 	var err error
+	h.Commands[contentID], err = cluster.copyCommand(contentID, h.MasterPath(contentHost), h.RemotePath(contentHost), h.Direction)
+	return err
+}
+
+func (s *SegmentCommands) GenerateCopyCommand(cluster *Cluster, contentID int) error {
+	var err error
+	s.Commands[contentID], err = cluster.copyCommand(contentID, s.MasterPath(contentID), s.RemotePath(contentID), s.Direction)
+	return err
+}
+
+func (c *Cluster) copyCommand(contentID int, masterPath string, segmentPath string, direction int) ([]string, error) {
+	masterHost, err := operating.System.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	var cmd []string
+	segmentHost := c.GetHostForContent(contentID)
 	switch direction {
-	case FROM_SEGMENTS:
-		cmd, err = ConstructCopyCommand(cluster.GetHostForContent(contentID), segPathFunc(contentID), masterHost, masterPathFunc(contentID))
-	case TO_SEGMENTS:
-		cmd, err = ConstructCopyCommand(masterHost, masterPathFunc(contentID), cluster.GetHostForContent(contentID), segPathFunc(contentID))
+	case TO_MASTER:
+		cmd, err = ConstructCopyCommand(segmentHost, segmentPath, masterHost, masterPath)
+	case FROM_MASTER:
+		cmd, err = ConstructCopyCommand(masterHost, masterPath, segmentHost, segmentPath)
 	}
 	if err != nil {
 		return nil, err
@@ -113,74 +192,37 @@ func (cluster *Cluster) GenerateSegmentCopyCommand(contentID int, masterPathFunc
 	return cmd, nil
 }
 
-func (cluster *Cluster) GenerateSSHCommandMapForSegments(includeMaster bool, generateCommand func(int) string) map[int][]string {
-	commandMap := make(map[int][]string, len(cluster.ContentIDs))
-	for _, contentID := range cluster.ContentIDs {
-		if contentID == -1 && !includeMaster {
-			continue
-		}
-		commandMap[contentID] = cluster.GenerateSegmentSSHCommand(contentID, generateCommand)
+func (h *HostCommands) GenerateSSHCommand(cluster *Cluster, contentID int) error {
+	contentHost := cluster.GetHostForContent(contentID)
+	h.Hostnames[contentHost]++
+	if h.Hostnames[contentHost] > 1 {
+		return nil
 	}
-	return commandMap
-}
-
-func (cluster *Cluster) GenerateSSHCommandMapForHosts(includeMaster bool, generateCommand func(int) string) map[int][]string {
-	/*
-	 * Derive a list of unique hosts from the cluster and then generate commands
-	 * for each.  If includeMaster is false but there are segments on the master
-	 * host, such as for a single-node cluster, the master host will be included.
-	 */
-	hostSegMap := make(map[string]int, 0)
-	for contentID, seg := range cluster.Segments {
-		if contentID == -1 && !includeMaster {
-			continue
-		}
-		hostSegMap[seg.Hostname] = contentID
-	}
-	commands := make(map[int][]string, 0)
-	for _, contentID := range hostSegMap {
-		commands[contentID] = cluster.GenerateSegmentSSHCommand(contentID, generateCommand)
-	}
-	return commands
-}
-
-func (cluster *Cluster) GenerateCopyCommandMapForSegments(masterPathFunc func(int) string, segPathFunc func(int) string, direction int) (map[int][]string, error) {
-	commandMap := make(map[int][]string, len(cluster.ContentIDs)-1)
 	var err error
-	for _, contentID := range cluster.ContentIDs {
-		if contentID == -1 {
-			continue
-		}
-		commandMap[contentID], err = cluster.GenerateSegmentCopyCommand(contentID, masterPathFunc, segPathFunc, direction)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return commandMap, nil
+	h.Commands[contentID], err = ConstructSSHCommand(cluster.GetHostForContent(contentID), h.SSHCommand(contentHost))
+	return err
 }
 
-func (cluster *Cluster) GenerateCopyCommandMapForHosts(masterPathFunc func(int) string, segPathFunc func(int) string, direction int) (map[int][]string, error) {
-	/*
-	 * Derive a list of unique hosts from the cluster and then generate commands
-	 * for each.  If includeMaster is false but there are segments on the master
-	 * host, such as for a single-node cluster, the master host will be included.
-	 */
-	hostSegMap := make(map[string]int, 0)
+func (s *SegmentCommands) GenerateSSHCommand(cluster *Cluster, contentID int) error {
 	var err error
-	for contentID, seg := range cluster.Segments {
-		if contentID == -1 {
+	s.Commands[contentID], err = ConstructSSHCommand(cluster.GetHostForContent(contentID), s.SSHCommand(contentID))
+	return err
+}
+
+func (c *Cluster) GenerateAndExecuteCommandMap(commands Commands) (*RemoteOutput, error) {
+	var err error
+	for contentID := range c.Segments {
+		if contentID == -1 && (commands.GetScope() == ON_SEGMENTS || commands.GetScope() == ON_HOSTS) {
 			continue
 		}
-		hostSegMap[seg.Hostname] = contentID
-	}
-	commands := make(map[int][]string, 0)
-	for _, contentID := range hostSegMap {
-		commands[contentID], err = cluster.GenerateSegmentCopyCommand(contentID, masterPathFunc, segPathFunc, direction)
-		if err != nil {
-			return nil, err
+		switch commands.GetCommandType() {
+		case COPY:
+			err = commands.GenerateCopyCommand(c, contentID)
+		case SSH:
+			err = commands.GenerateSSHCommand(c, contentID)
 		}
 	}
-	return commands, nil
+	return c.ExecuteClusterCommand(commands.GetScope(), commands.GetCommands()), err
 }
 
 func (executor *GPDBExecutor) ExecuteLocalCommand(commandStr string) (string, error) {
@@ -236,53 +278,76 @@ func (executor *GPDBExecutor) ExecuteClusterCommand(scope int, commandMap map[in
 }
 
 /*
- * GenerateAndExecuteCommand and CheckClusterError are generic wrapper functions
+ * GenerateAndExecuteHostCommand, GenerateAndExecuteSegmentCommand, and CheckClusterError are generic wrapper functions
  * to simplify execution of shell commands on remote hosts.
  */
-func (cluster *Cluster) GenerateAndExecuteCommand(verboseMsg string, execFunc func(contentID int) string, scope int) *RemoteOutput {
-	gplog.Verbose(verboseMsg)
-	var commandMap map[int][]string
-	switch scope {
-	case ON_SEGMENTS:
-		commandMap = cluster.GenerateSSHCommandMapForSegments(false, execFunc)
-	case ON_SEGMENTS_AND_MASTER:
-		commandMap = cluster.GenerateSSHCommandMapForSegments(true, execFunc)
-	case ON_HOSTS:
-		commandMap = cluster.GenerateSSHCommandMapForHosts(false, execFunc)
-	case ON_HOSTS_AND_MASTER:
-		commandMap = cluster.GenerateSSHCommandMapForHosts(true, execFunc)
-	default:
-		// If we ever get to this case, it's programmer error, not user error.
-		gplog.Fatal(fmt.Errorf("Invalid remote execution scope for command to %s: %d", strings.ToLower(verboseMsg), scope), "")
+func (c *Cluster) GenerateAndExecuteHostCommand(verboseMsg string, execFunc func(string) string, includeMaster bool) (*RemoteOutput, error) {
+	scope := ON_HOSTS
+	if includeMaster {
+		scope = ON_HOSTS_AND_MASTER
 	}
-
-	return cluster.ExecuteClusterCommand(scope, commandMap)
+	gplog.Verbose(verboseMsg)
+	commands := &HostCommands{
+		Commands:    make(map[int][]string),
+		Hostnames:   make(map[string]int),
+		SSHCommand:  execFunc,
+		Scope:       scope,
+		CommandType: SSH,
+	}
+	return c.GenerateAndExecuteCommandMap(commands)
 }
 
-func (cluster *Cluster) GenerateAndExecuteCopy(verboseMsg string, masterPathFunc func(contentID int) string, segPathFunc func(contentID int) string, direction int, scope int) *RemoteOutput {
+func (c *Cluster) GenerateAndExecuteSegmentCommand(verboseMsg string, execFunc func(int) string, includeMaster bool) (*RemoteOutput, error) {
+	scope := ON_SEGMENTS
+	if includeMaster {
+		scope = ON_SEGMENTS_AND_MASTER
+	}
 	gplog.Verbose(verboseMsg)
-	var commandMap map[int][]string
-	var err error
-	switch scope {
-	case ON_SEGMENTS, ON_SEGMENTS_AND_MASTER:
-		scope = ON_SEGMENTS
-		commandMap, err = cluster.GenerateCopyCommandMapForSegments(masterPathFunc, segPathFunc, direction)
-	case ON_HOSTS, ON_HOSTS_AND_MASTER:
-		scope = ON_HOSTS
-		commandMap, err = cluster.GenerateCopyCommandMapForHosts(masterPathFunc, segPathFunc, direction)
-	default:
-		// If we ever get to this case, it's programmer error, not user error.
-		gplog.Fatal(fmt.Errorf("Invalid remote execution scope for command to %s: %d", strings.ToLower(verboseMsg), scope), "")
+	commands := &SegmentCommands{
+		Commands:    make(map[int][]string),
+		SSHCommand:  execFunc,
+		Scope:       scope,
+		CommandType: SSH,
 	}
-
-	if err != nil {
-		gplog.Fatal(err, "")
-	}
-
-	return cluster.ExecuteClusterCommand(scope, commandMap)
+	return c.GenerateAndExecuteCommandMap(commands)
 }
 
-func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMsg string, messageFunc func(contentID int) string, noFatal ...bool) {
+func (c *Cluster) GenerateAndExecuteHostCopy(verboseMsg string, masterPathFunc func(string) string, remotePathFunc func(string) string, direction int) (*RemoteOutput, error) {
+	gplog.Verbose(verboseMsg)
+	if direction != TO_MASTER && direction != FROM_MASTER {
+		err := errors.New("Copy commands must use cluster.TO_MASTER or cluster.FROM_MASTER")
+		gplog.Error(err.Error(), "")
+		return nil, err
+	}
+	commands := &HostCommands{
+		Commands:    make(map[int][]string),
+		Hostnames:   make(map[string]int),
+		MasterPath:  masterPathFunc,
+		RemotePath:  remotePathFunc,
+		Direction:   direction,
+		Scope:       ON_HOSTS,
+		CommandType: COPY}
+	return c.GenerateAndExecuteCommandMap(commands)
+}
+
+func (c *Cluster) GenerateAndExecuteSegmentCopy(verboseMsg string, masterPathFunc func(int) string, remotePathFunc func(int) string, direction int) (*RemoteOutput, error) {
+	gplog.Verbose(verboseMsg)
+	if direction != TO_MASTER && direction != FROM_MASTER {
+		err := errors.New("Copy commands must use cluster.TO_MASTER or cluster.FROM_MASTER")
+		gplog.Error(err.Error(), "")
+		return nil, err
+	}
+	commands := &SegmentCommands{
+		Commands:    make(map[int][]string),
+		MasterPath:  masterPathFunc,
+		RemotePath:  remotePathFunc,
+		Direction:   direction,
+		Scope:       ON_SEGMENTS,
+		CommandType: COPY}
+	return c.GenerateAndExecuteCommandMap(commands)
+}
+
+func (c *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMsg string, messageFunc func(contentID int) string, noFatal ...bool) {
 	if remoteOutput.NumErrors == 0 {
 		return
 	}
@@ -293,7 +358,7 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 			if remoteOutput.Scope != ON_HOSTS && remoteOutput.Scope != ON_HOSTS_AND_MASTER {
 				segMsg = fmt.Sprintf("on segment %d ", contentID)
 			}
-			gplog.Verbose("%s %son host %s with error %s: %s", messageFunc(contentID), segMsg, cluster.GetHostForContent(contentID), err, remoteOutput.Stderrs[contentID])
+			gplog.Verbose("%s %son host %s with error %s: %s", messageFunc(contentID), segMsg, c.GetHostForContent(contentID), err, remoteOutput.Stderrs[contentID])
 			gplog.Verbose("Command was: %s", remoteOutput.CmdStrs[contentID])
 		}
 	}
@@ -315,24 +380,24 @@ func LogFatalClusterError(errMessage string, scope int, numErrors int) {
 	gplog.Fatal(errors.Errorf("%s on %d %s. See %s for a complete list of errors.", errMessage, numErrors, segMsg, gplog.GetLogFilePath()), "")
 }
 
-func (cluster *Cluster) GetContentList() []int {
-	return cluster.ContentIDs
+func (c *Cluster) GetContentList() []int {
+	return c.ContentIDs
 }
 
-func (cluster *Cluster) GetDbidForContent(contentID int) int {
-	return cluster.Segments[contentID].DbID
+func (c *Cluster) GetDbidForContent(contentID int) int {
+	return c.Segments[contentID].DbID
 }
 
-func (cluster *Cluster) GetPortForContent(contentID int) int {
-	return cluster.Segments[contentID].Port
+func (c *Cluster) GetPortForContent(contentID int) int {
+	return c.Segments[contentID].Port
 }
 
-func (cluster *Cluster) GetHostForContent(contentID int) string {
-	return cluster.Segments[contentID].Hostname
+func (c *Cluster) GetHostForContent(contentID int) string {
+	return c.Segments[contentID].Hostname
 }
 
-func (cluster *Cluster) GetDirForContent(contentID int) string {
-	return cluster.Segments[contentID].DataDir
+func (c *Cluster) GetDirForContent(contentID int) string {
+	return c.Segments[contentID].DataDir
 }
 
 /*
@@ -381,15 +446,24 @@ func MustGetSegmentConfiguration(connection *dbconn.DBConn) []SegConfig {
 	return segConfigs
 }
 
-func ConstructSSHCommand(host string, cmd string) []string {
-	currentUser, _ := operating.System.CurrentUser()
+func ConstructSSHCommand(host string, cmd string) ([]string, error) {
+	currentUser, err := operating.System.CurrentUser()
+	if err != nil {
+		return nil, err
+	}
 	user := currentUser.Username
-	return []string{"ssh", "-o", "StrictHostKeyChecking=no", fmt.Sprintf("%s@%s", user, host), cmd}
+	return []string{"ssh", "-o", "StrictHostKeyChecking=no", fmt.Sprintf("%s@%s", user, host), cmd}, nil
 }
 
 func ConstructCopyCommand(srcHost string, srcPath string, targetHost string, targetPath string) ([]string, error) {
-	currentUser, _ := operating.System.CurrentUser()
-	currentHost, _ := operating.System.Hostname()
+	currentUser, err := operating.System.CurrentUser()
+	if err != nil {
+		return nil, err
+	}
+	currentHost, err := operating.System.Hostname()
+	if err != nil {
+		return nil, err
+	}
 	user := currentUser.Username
 	if targetHost != currentHost {
 		if srcHost != currentHost {
