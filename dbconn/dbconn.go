@@ -14,14 +14,8 @@ import (
 
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
-
-	/*
-	 * We previously used github.com/lib/pq as our Postgres driver,
-	 * but it had a bug with the way it handled certain encodings.
-	 * pgx seems to handle these encodings properly.
-	 */
-	_ "github.com/jackc/pgx/stdlib"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq" // Need driver for postgres
 	"github.com/pkg/errors"
 )
 
@@ -194,12 +188,12 @@ func (dbconn *DBConn) Connect(numConns int) error {
 	if dbconn.ConnPool != nil {
 		return errors.Errorf("The database connection must be closed before reusing the connection")
 	}
-	// This string takes in the literal user/database names. They do not need to be escaped or quoted.
-	connStr := fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable", dbconn.User, dbconn.Host, dbconn.Port, dbconn.DBName)
-
+	dbname := EscapeConnectionParam(dbconn.DBName)
+	user := EscapeConnectionParam(dbconn.User)
+	connStr := fmt.Sprintf(`user='%s' dbname='%s' host=%s port=%d sslmode=disable`, user, dbname, dbconn.Host, dbconn.Port)
 	dbconn.ConnPool = make([]*sqlx.DB, numConns)
 	for i := 0; i < numConns; i++ {
-		conn, err := dbconn.Driver.Connect("pgx", connStr)
+		conn, err := dbconn.Driver.Connect("postgres", connStr)
 		err = dbconn.handleConnectionError(err)
 		if err != nil {
 			return err
@@ -331,6 +325,16 @@ func (dbconn *DBConn) ValidateConnNum(whichConn ...int) int {
 		gplog.Fatal(errors.Errorf("Invalid connection number: %d", whichConn[0]), "")
 	}
 	return whichConn[0]
+}
+
+/*
+ * Other useful/helper functions involving DBConn
+ */
+
+func EscapeConnectionParam(param string) string {
+	param = strings.Replace(param, `\`, `\\`, -1)
+	param = strings.Replace(param, `'`, `\'`, -1)
+	return param
 }
 
 /*
