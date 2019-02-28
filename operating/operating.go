@@ -67,6 +67,7 @@ type SystemFunctions struct {
 	OpenFileRead  func(name string, flag int, perm os.FileMode) (ReadCloserAt, error)
 	OpenFileWrite func(name string, flag int, perm os.FileMode) (io.WriteCloser, error)
 	ReadFile      func(filename string) ([]byte, error)
+	Remove        func(name string) error
 	Stat          func(name string) (os.FileInfo, error)
 	Stdin         ReadCloserAt
 	Stdout        io.WriteCloser
@@ -87,6 +88,7 @@ func InitializeSystemFunctions() *SystemFunctions {
 		OpenFileRead:  OpenFileRead,
 		OpenFileWrite: OpenFileWrite,
 		ReadFile:      ioutil.ReadFile,
+		Remove:        os.Remove,
 		Stat:          os.Stat,
 		Stdin:         os.Stdin,
 		Stdout:        os.Stdout,
