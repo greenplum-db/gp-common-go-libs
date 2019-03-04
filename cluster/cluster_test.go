@@ -248,6 +248,57 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(commandMap[3]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 3"}))
 		})
 	})
+	Describe("GenerateLocalCommandMapForSegments", func() {
+		It("Returns a map of local commands for one segment, including master", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, remoteSegOne})
+			commandMap := testCluster.GenerateLocalCommandMapForSegments(true, func(id int) string {
+				return fmt.Sprintf("echo %d", id)
+			})
+			Expect(len(commandMap)).To(Equal(2))
+			Expect(commandMap[-1]).To(Equal([]string{"bash", "-c", "echo -1"}))
+			Expect(commandMap[1]).To(Equal([]string{"bash", "-c", "echo 1"}))
+		})
+		It("Returns a map of local commands for one segment, excluding master", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, remoteSegOne})
+			commandMap := testCluster.GenerateLocalCommandMapForSegments(false, func(id int) string {
+				return fmt.Sprintf("echo %d", id)
+			})
+			Expect(len(commandMap)).To(Equal(1))
+			Expect(commandMap[1]).To(Equal([]string{"bash", "-c", "echo 1"}))
+		})
+	})
+	Describe("GenerateLocalCommandMapForHosts", func() {
+		It("Returns a map of local commands for hosts, including master", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{localSegOne, masterSeg, remoteSegOne, remoteSegTwo})
+			commandMap := testCluster.GenerateLocalCommandMapForHosts(true, func(id int) string {
+				return fmt.Sprintf("echo %d", id)
+			})
+			Expect(len(commandMap)).To(Equal(3))
+			// Either -1 or 0 will be present, but which content isn't guaranteed since we only really care about the host
+			if _, ok := commandMap[-1]; ok {
+				Expect(commandMap[-1]).To(Equal([]string{"bash", "-c", "echo -1"}))
+			} else {
+				Expect(commandMap[0]).To(Equal([]string{"bash", "-c", "echo 0"}))
+			}
+			Expect(commandMap[1]).To(Equal([]string{"bash", "-c", "echo 1"}))
+			Expect(commandMap[3]).To(Equal([]string{"bash", "-c", "echo 3"}))
+		})
+		It("Returns a map of local commands for hosts, excluding master", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{localSegOne, localSegTwo, masterSeg, remoteSegOne, remoteSegTwo})
+			commandMap := testCluster.GenerateLocalCommandMapForHosts(false, func(id int) string {
+				return fmt.Sprintf("echo %d", id)
+			})
+			Expect(len(commandMap)).To(Equal(3))
+			// Either 2 or 0 will be present, but which content isn't guaranteed since we only really care about the host
+			if _, ok := commandMap[2]; ok {
+				Expect(commandMap[2]).To(Equal([]string{"bash", "-c", "echo 2"}))
+			} else {
+				Expect(commandMap[0]).To(Equal([]string{"bash", "-c", "echo 0"}))
+			}
+			Expect(commandMap[1]).To(Equal([]string{"bash", "-c", "echo 1"}))
+			Expect(commandMap[3]).To(Equal([]string{"bash", "-c", "echo 3"}))
+		})
+	})
 	Describe("ExecuteLocalCommand", func() {
 		BeforeEach(func() {
 			os.MkdirAll("/tmp/gp_common_go_libs_test", 0777)
