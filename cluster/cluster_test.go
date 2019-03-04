@@ -126,15 +126,16 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(len(commandMap)).To(Equal(0))
 		})
 		It("Returns a map of ssh commands for one segment, including master", func() {
-			testCluster := cluster.NewCluster([]cluster.SegConfig{remoteSegOne})
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, remoteSegOne})
 			commandMap := testCluster.GenerateSSHCommandMapForSegments(true, func(_ int) string {
 				return "ls"
 			})
-			Expect(len(commandMap)).To(Equal(1))
+			Expect(len(commandMap)).To(Equal(2))
+			Expect(commandMap[-1]).To(Equal([]string{"bash", "-c", "ls"}))
 			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "ls"}))
 		})
 		It("Returns a map of ssh commands for one segment, excluding master", func() {
-			testCluster := cluster.NewCluster([]cluster.SegConfig{remoteSegOne})
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, remoteSegOne})
 			commandMap := testCluster.GenerateSSHCommandMapForSegments(false, func(_ int) string {
 				return "ls"
 			})
@@ -142,24 +143,37 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "ls"}))
 		})
 		It("Returns a map of ssh commands for two segments on the same host, including master", func() {
-			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne})
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, localSegTwo})
 			commandMap := testCluster.GenerateSSHCommandMapForSegments(true, func(_ int) string {
 				return "ls"
 			})
-			Expect(len(commandMap)).To(Equal(2))
+			Expect(len(commandMap)).To(Equal(3))
 			Expect(commandMap[-1]).To(Equal([]string{"bash", "-c", "ls"}))
 			Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "ls"}))
+			Expect(commandMap[2]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "ls"}))
 		})
 		It("Returns a map of ssh commands for two segments on the same host, excluding master", func() {
-			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne})
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, localSegTwo})
 			commandMap := testCluster.GenerateSSHCommandMapForSegments(false, func(_ int) string {
 				return "ls"
 			})
-			Expect(len(commandMap)).To(Equal(1))
+			Expect(len(commandMap)).To(Equal(2))
 			Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "ls"}))
+			Expect(commandMap[2]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "ls"}))
 		})
-		It("Returns a map of ssh commands for three segments on different hosts", func() {
-			testCluster := cluster.NewCluster([]cluster.SegConfig{localSegOne, remoteSegOne, remoteSegTwo})
+		It("Returns a map of ssh commands for three segments on different hosts, including master", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, remoteSegOne, remoteSegTwo})
+			commandMap := testCluster.GenerateSSHCommandMapForSegments(true, func(contentID int) string {
+				return fmt.Sprintf("echo %d", contentID)
+			})
+			Expect(len(commandMap)).To(Equal(4))
+			Expect(commandMap[-1]).To(Equal([]string{"bash", "-c", "echo -1"}))
+			Expect(commandMap[0]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@localhost", "echo 0"}))
+			Expect(commandMap[1]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "echo 1"}))
+			Expect(commandMap[3]).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "echo 3"}))
+		})
+		It("Returns a map of ssh commands for three segments on different hosts, excluding master", func() {
+			testCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, remoteSegOne, remoteSegTwo})
 			commandMap := testCluster.GenerateSSHCommandMapForSegments(false, func(contentID int) string {
 				return fmt.Sprintf("echo %d", contentID)
 			})
