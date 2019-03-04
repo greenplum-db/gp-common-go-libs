@@ -41,17 +41,27 @@ type SegConfig struct {
 
 /*
  * We pass values from this enum into GenerateAndExecuteCommand to define the
- * scope for remote command execution.
- * - ON_SEGMENTS: Execute on each segment, excluding the master.
+ * nature and scope of the command execution.
+ * - ON_SEGMENTS:            Execute on each segment, excluding the master.
  * - ON_SEGMENTS_AND_MASTER: Execute on each segment, including the master.
- * - ON_HOSTS: Execute on each host, excluding the master host.
- * - ON_HOSTS_AND_MASTER: Execute on each host, including the master host.
+ * - ON_HOSTS:               Execute on each host, excluding the master host.
+ * - ON_HOSTS_AND_MASTER:    Execute on each host, including the master host.
+ *
+ * - ON_MASTER_TO_SEGMENTS:            Execute commands on master about segments, excluding master.
+ * - ON_MASTER_TO_SEGMENTS_AND_MASTER: Execute commands on master about segments, including master.
+ * - ON_MASTER_TO_HOSTS:               Execute commands on master about hosts, excluding master.
+ * - ON_MASTER_TO_HOSTS_AND_MASTER:    Execute commands on master about hosts, including master.
  */
 const (
 	ON_SEGMENTS = iota
 	ON_SEGMENTS_AND_MASTER
 	ON_HOSTS
 	ON_HOSTS_AND_MASTER
+
+	ON_MASTER_TO_SEGMENTS
+	ON_MASTER_TO_SEGMENTS_AND_MASTER
+	ON_MASTER_TO_HOSTS
+	ON_MASTER_TO_HOSTS_AND_MASTER
 )
 
 type RemoteOutput struct {
@@ -117,6 +127,34 @@ func (cluster *Cluster) GenerateSSHCommandMapForHosts(includeMaster bool, genera
 	return commands
 }
 
+func (cluster *Cluster) GenerateLocalCommandMapForSegments(includeMaster bool, generateCommand func(int) string) map[int][]string {
+	commandMap := make(map[int][]string, len(cluster.ContentIDs))
+	for _, contentID := range cluster.ContentIDs {
+		if contentID == -1 && !includeMaster {
+			continue
+		}
+		cmdStr := generateCommand(contentID)
+		commandMap[contentID] = []string{"bash", "-c", cmdStr}
+	}
+	return commandMap
+}
+
+func (cluster *Cluster) GenerateLocalCommandMapForHosts(includeMaster bool, generateCommand func(int) string) map[int][]string {
+	hostSegMap := make(map[string]int, 0)
+	for contentID, seg := range cluster.Segments {
+		if contentID == -1 && !includeMaster {
+			continue
+		}
+		hostSegMap[seg.Hostname] = contentID
+	}
+	commands := make(map[int][]string, 0)
+	for _, contentID := range hostSegMap {
+		cmdStr := generateCommand(contentID)
+		commands[contentID] = []string{"bash", "-c", cmdStr}
+	}
+	return commands
+}
+
 func (executor *GPDBExecutor) ExecuteLocalCommand(commandStr string) (string, error) {
 	output, err := exec.Command("bash", "-c", commandStr).CombinedOutput()
 	return string(output), err
@@ -171,7 +209,11 @@ func (executor *GPDBExecutor) ExecuteClusterCommand(scope int, commandMap map[in
 
 /*
  * GenerateAndExecuteCommand and CheckClusterError are generic wrapper functions
- * to simplify execution of shell commands on remote hosts.
+ * to simplify execution of...
+ * 1. shell commands directly on remote hosts via ssh.
+ *    - e.g. running an ls on all hosts
+ * 2. shell commands on master to push to remote hosts.
+ *    - e.g. running multiple scps on master to push a file to all segments
  */
 func (cluster *Cluster) GenerateAndExecuteCommand(verboseMsg string, execFunc func(contentID int) string, scope int) *RemoteOutput {
 	gplog.Verbose(verboseMsg)
@@ -185,6 +227,15 @@ func (cluster *Cluster) GenerateAndExecuteCommand(verboseMsg string, execFunc fu
 		commandMap = cluster.GenerateSSHCommandMapForHosts(false, execFunc)
 	case ON_HOSTS_AND_MASTER:
 		commandMap = cluster.GenerateSSHCommandMapForHosts(true, execFunc)
+
+	case ON_MASTER_TO_SEGMENTS:
+		commandMap = cluster.GenerateLocalCommandMapForSegments(false, execFunc)
+	case ON_MASTER_TO_SEGMENTS_AND_MASTER:
+		commandMap = cluster.GenerateLocalCommandMapForSegments(true, execFunc)
+	case ON_MASTER_TO_HOSTS:
+		commandMap = cluster.GenerateLocalCommandMapForHosts(false, execFunc)
+	case ON_MASTER_TO_HOSTS_AND_MASTER:
+		commandMap = cluster.GenerateLocalCommandMapForHosts(true, execFunc)
 	default:
 		// If we ever get to this case, it's programmer error, not user error.
 		gplog.Fatal(fmt.Errorf("Invalid remote execution scope for command to %s: %d", strings.ToLower(verboseMsg), scope), "")
