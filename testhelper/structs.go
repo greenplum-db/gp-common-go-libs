@@ -40,7 +40,7 @@ type TestExecutor struct {
 	LocalError      error
 	LocalCommands   []string
 	ClusterOutput   *cluster.RemoteOutput
-	ClusterCommands []map[int][]string
+	ClusterCommands [][]cluster.ShellCommand
 	ErrorOnExecNum  int // Throw the specified error after this many executions of Execute[...]Command(); 0 means always return error
 	NumExecutions   int
 }
@@ -54,9 +54,9 @@ func (executor *TestExecutor) ExecuteLocalCommand(commandStr string) (string, er
 	return executor.LocalOutput, nil
 }
 
-func (executor *TestExecutor) ExecuteClusterCommand(scope int, commandMap map[int][]string) *cluster.RemoteOutput {
+func (executor *TestExecutor) ExecuteClusterCommand(scope int, commandList []cluster.ShellCommand) *cluster.RemoteOutput {
 	executor.NumExecutions++
-	executor.ClusterCommands = append(executor.ClusterCommands, commandMap)
+	executor.ClusterCommands = append(executor.ClusterCommands, commandList)
 	if executor.ErrorOnExecNum == 0 || executor.NumExecutions == executor.ErrorOnExecNum {
 		return executor.ClusterOutput
 	}
