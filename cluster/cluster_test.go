@@ -372,9 +372,12 @@ var _ = Describe("cluster/cluster tests", func() {
 		})
 	})
 	Describe("CheckClusterError", func() {
-		It("prints error messages for a command executed on a per-segment basis", func() {
-			remoteOutput := &cluster.RemoteOutput{
-				Scope:     cluster.ON_SEGMENTS,
+		var (
+			remoteOutput         *cluster.RemoteOutput
+			remoteOutputOnMaster *cluster.RemoteOutput
+		)
+		BeforeEach(func() {
+			remoteOutput = &cluster.RemoteOutput{
 				NumErrors: 1,
 				Stderrs: map[int]string{
 					1: "exit status 1",
@@ -386,6 +389,33 @@ var _ = Describe("cluster/cluster tests", func() {
 					1: "this is the command",
 				},
 			}
+			remoteOutputOnMaster = &cluster.RemoteOutput{
+				NumErrors: 1,
+				Stderrs: map[int]string{
+					1: "exit status 1",
+				},
+				Errors: map[int]error{
+					1: errors.Errorf("scp error"),
+				},
+				CmdStrs: map[int]string{
+					1: "scp </master_dir/test/file> <host/seg dest path>",
+				},
+			}
+
+		})
+		It("prints error messages for a command executed on a per-segment basis", func() {
+			remoteOutput.Scope = cluster.ON_SEGMENTS
+
+			defer testhelper.ShouldPanicWithMessage("Got an error on 1 segment. See gbytes.Buffer for a complete list of errors.")
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the command`))
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error received on segment 1 on host remotehost1 with error ssh error: exit status 1`))
+			testCluster.CheckClusterError(remoteOutput, "Got an error", func(contentID int) string {
+				return "Error received"
+			})
+		})
+		It("prints error messages for a command executed on a per-segment basis", func() {
+			remoteOutput.Scope = cluster.ON_SEGMENTS_AND_MASTER
+
 			defer testhelper.ShouldPanicWithMessage("Got an error on 1 segment. See gbytes.Buffer for a complete list of errors.")
 			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the command`))
 			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error received on segment 1 on host remotehost1 with error ssh error: exit status 1`))
@@ -394,16 +424,8 @@ var _ = Describe("cluster/cluster tests", func() {
 			})
 		})
 		It("prints error messages for a command executed on a per-host basis", func() {
-			remoteOutput := &cluster.RemoteOutput{
-				Scope:     cluster.ON_HOSTS,
-				NumErrors: 1,
-				Stderrs: map[int]string{
-					1: "exit status 1",
-				},
-				Errors: map[int]error{
-					1: errors.Errorf("ssh error"),
-				},
-			}
+			remoteOutput.Scope = cluster.ON_HOSTS
+
 			defer testhelper.ShouldPanicWithMessage("Got an error on 1 host. See gbytes.Buffer for a complete list of errors.")
 			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error received on host remotehost1 with error ssh error: exit status 1`))
 			testCluster.CheckClusterError(remoteOutput, "Got an error", func(contentID int) string {
@@ -411,20 +433,53 @@ var _ = Describe("cluster/cluster tests", func() {
 			})
 		})
 		It("prints error messages for a command executed on a per-host and master basis", func() {
-			remoteOutput := &cluster.RemoteOutput{
-				Scope:     cluster.ON_HOSTS_AND_MASTER,
-				NumErrors: 1,
-				Stderrs: map[int]string{
-					1: "exit status 1",
-				},
-				Errors: map[int]error{
-					1: errors.Errorf("ssh error"),
-				},
-			}
+			remoteOutput.Scope = cluster.ON_HOSTS_AND_MASTER
+
 			defer testhelper.ShouldPanicWithMessage("Got an error on 1 host. See gbytes.Buffer for a complete list of errors.")
 			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error received on host remotehost1 with error ssh error: exit status 1`))
 			testCluster.CheckClusterError(remoteOutput, "Got an error", func(contentID int) string {
 				return "Error received"
+			})
+		})
+		It("prints error messages for per-segment commands executed on master to segments", func() {
+			remoteOutputOnMaster.Scope = cluster.ON_MASTER_TO_SEGMENTS
+
+			defer testhelper.ShouldPanicWithMessage("Got an error on master for 1 segment. See gbytes.Buffer for a complete list of errors.")
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: scp </master_dir/test/file> <host/seg dest path>`))
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error occurred on master for segment 1 on host remotehost1 with error scp error: exit status 1`))
+			testCluster.CheckClusterError(remoteOutputOnMaster, "Got an error", func(contentID int) string {
+				return "Error occurred"
+			})
+		})
+		It("prints error messages for per-segment commands executed on master to segments and on master itself", func() {
+			remoteOutputOnMaster.Scope = cluster.ON_MASTER_TO_SEGMENTS_AND_MASTER
+
+			defer testhelper.ShouldPanicWithMessage("Got an error on master for 1 segment. See gbytes.Buffer for a complete list of errors.")
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: scp </master_dir/test/file> <host/seg dest path>`))
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error occurred on master for segment 1 on host remotehost1 with error scp error: exit status 1`))
+			testCluster.CheckClusterError(remoteOutputOnMaster, "Got an error", func(contentID int) string {
+				return "Error occurred"
+			})
+		})
+		It("prints error messages for per-host commands executed on master to hosts", func() {
+			remoteOutputOnMaster.Scope = cluster.ON_MASTER_TO_HOSTS
+
+			defer testhelper.ShouldPanicWithMessage("Got an error on master for 1 host. See gbytes.Buffer for a complete list of errors.")
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: scp </master_dir/test/file> <host/seg dest path>`))
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error occurred on master for host remotehost1 with error scp error: exit status 1`))
+			testCluster.CheckClusterError(remoteOutputOnMaster, "Got an error", func(contentID int) string {
+				return "Error occurred"
+			})
+		})
+		It("prints error messages for per-host commands executed on master to hosts and on master itself", func() {
+			remoteOutputOnMaster.Scope = cluster.ON_MASTER_TO_HOSTS_AND_MASTER
+
+			defer testhelper.ShouldPanicWithMessage("Got an error on master for 1 host. See gbytes.Buffer for a complete list of errors.")
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: scp </master_dir/test/file> <host/seg dest path>`))
+			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Error occurred on master for host remotehost1 with error scp error: exit status 1`))
+
+			testCluster.CheckClusterError(remoteOutputOnMaster, "Got an error", func(contentID int) string {
+				return "Error occurred"
 			})
 		})
 	})

@@ -251,11 +251,22 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 
 	for contentID, err := range remoteOutput.Errors {
 		if err != nil {
-			segMsg := ""
-			if remoteOutput.Scope != ON_HOSTS && remoteOutput.Scope != ON_HOSTS_AND_MASTER {
-				segMsg = fmt.Sprintf("on segment %d ", contentID)
+			var dest string
+			hostname := cluster.GetHostForContent(contentID)
+			s := remoteOutput.Scope
+			switch {
+			case s == ON_SEGMENTS || s == ON_SEGMENTS_AND_MASTER:
+				dest += fmt.Sprintf("on segment %d ", contentID)
+				dest += fmt.Sprintf("on host %s", hostname)
+			case s == ON_HOSTS || s == ON_HOSTS_AND_MASTER:
+				dest += fmt.Sprintf("on host %s", hostname)
+			case s == ON_MASTER_TO_SEGMENTS || s == ON_MASTER_TO_SEGMENTS_AND_MASTER:
+				dest += fmt.Sprintf("on master for segment %d ", contentID)
+				dest += fmt.Sprintf("on host %s", hostname)
+			case s == ON_MASTER_TO_HOSTS || s == ON_MASTER_TO_HOSTS_AND_MASTER:
+				dest += fmt.Sprintf("on master for host %s", hostname)
 			}
-			gplog.Verbose("%s %son host %s with error %s: %s", messageFunc(contentID), segMsg, cluster.GetHostForContent(contentID), err, remoteOutput.Stderrs[contentID])
+			gplog.Verbose("%s %s with error %s: %s", messageFunc(contentID), dest, err, remoteOutput.Stderrs[contentID])
 			gplog.Verbose("Command was: %s", remoteOutput.CmdStrs[contentID])
 		}
 	}
@@ -267,14 +278,20 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 }
 
 func LogFatalClusterError(errMessage string, scope int, numErrors int) {
+	str := " on"
+	if scope == ON_MASTER_TO_SEGMENTS || scope == ON_MASTER_TO_SEGMENTS_AND_MASTER || scope == ON_MASTER_TO_HOSTS || scope == ON_MASTER_TO_HOSTS_AND_MASTER {
+		str += " master for"
+	}
+	errMessage += str
+
 	segMsg := "segment"
-	if scope == ON_HOSTS || scope == ON_HOSTS_AND_MASTER {
+	if scope == ON_HOSTS || scope == ON_HOSTS_AND_MASTER || scope == ON_MASTER_TO_HOSTS || scope == ON_MASTER_TO_HOSTS_AND_MASTER {
 		segMsg = "host"
 	}
 	if numErrors != 1 {
 		segMsg += "s"
 	}
-	gplog.Fatal(errors.Errorf("%s on %d %s. See %s for a complete list of errors.", errMessage, numErrors, segMsg, gplog.GetLogFilePath()), "")
+	gplog.Fatal(errors.Errorf("%s %d %s. See %s for a complete list of errors.", errMessage, numErrors, segMsg, gplog.GetLogFilePath()), "")
 }
 
 func (cluster *Cluster) GetContentList() []int {
