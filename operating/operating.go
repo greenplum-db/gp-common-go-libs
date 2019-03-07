@@ -71,6 +71,7 @@ type SystemFunctions struct {
 	Stat          func(name string) (os.FileInfo, error)
 	Stdin         ReadCloserAt
 	Stdout        io.WriteCloser
+	TempFile      func(dir, pattern string) (f *os.File, err error)
 	Local         *time.Location
 }
 
@@ -92,6 +93,7 @@ func InitializeSystemFunctions() *SystemFunctions {
 		Stat:          os.Stat,
 		Stdin:         os.Stdin,
 		Stdout:        os.Stdout,
+		TempFile:      ioutil.TempFile,
 		Local:         time.Local,
 	}
 }
