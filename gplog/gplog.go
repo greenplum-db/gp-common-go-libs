@@ -43,6 +43,10 @@ const (
 	 * The following constants representing the current logging level, and are
 	 * cumulative (that is, setting the log level to Debug will print all Error-,
 	 * Info-, and Verbose-level messages in addition to Debug-level messages).
+	 *
+	 * Log levels for terminal output and logfile output are separate, and can be
+	 * set independently.  By default, a new logger will have a verbosity of INFO
+	 * for terminal output and DEBUG for logfile output.
 	 */
 	LOGERROR = iota
 	LOGINFO
@@ -75,13 +79,14 @@ const (
 type LogPrefixFunc func(string) string
 
 type GpLogger struct {
-	logStdout     *log.Logger
-	logStderr     *log.Logger
-	logFile       *log.Logger
-	logFileName   string
-	verbosity     int
-	header        string
-	logPrefixFunc LogPrefixFunc
+	logStdout      *log.Logger
+	logStderr      *log.Logger
+	logFile        *log.Logger
+	logFileName    string
+	shellVerbosity int
+	fileVerbosity  int
+	header         string
+	logPrefixFunc  LogPrefixFunc
 }
 
 /*
@@ -120,15 +125,21 @@ func GetLogger() *GpLogger {
 }
 
 // stdout and stderr are passed in to this function to enable output redirection in tests.
-func NewLogger(stdout io.Writer, stderr io.Writer, logFile io.Writer, logFileName string, verbosity int, program string) *GpLogger {
+func NewLogger(stdout io.Writer, stderr io.Writer, logFile io.Writer, logFileName string, shellVerbosity int, program string, logFileVerbosity ...int) *GpLogger {
+	fileVerbosity := LOGDEBUG
+	// Shell verbosity must always be specified, but file verbosity defaults to LOGDEBUG to encourage more verbose log output.
+	if len(logFileVerbosity) == 1 && logFileVerbosity[0] >= LOGERROR && logFileVerbosity[0] <= LOGDEBUG {
+		fileVerbosity = logFileVerbosity[0]
+	}
 	return &GpLogger{
-		logStdout:     log.New(stdout, "", 0),
-		logStderr:     log.New(stderr, "", 0),
-		logFile:       log.New(logFile, "", 0),
-		logFileName:   logFileName,
-		verbosity:     verbosity,
-		header:        GetHeader(program),
-		logPrefixFunc: nil,
+		logStdout:      log.New(stdout, "", 0),
+		logStderr:      log.New(stderr, "", 0),
+		logFile:        log.New(logFile, "", 0),
+		logFileName:    logFileName,
+		shellVerbosity: shellVerbosity,
+		fileVerbosity:  fileVerbosity,
+		header:         GetHeader(program),
+		logPrefixFunc:  nil,
 	}
 }
 
@@ -163,11 +174,19 @@ func GetLogFilePath() string {
 }
 
 func GetVerbosity() int {
-	return logger.verbosity
+	return logger.shellVerbosity
 }
 
 func SetVerbosity(verbosity int) {
-	logger.verbosity = verbosity
+	logger.shellVerbosity = verbosity
+}
+
+func GetLogFileVerbosity() int {
+	return logger.fileVerbosity
+}
+
+func SetLogFileVerbosity(verbosity int) {
+	logger.fileVerbosity = verbosity
 }
 
 func GetErrorCode() int {
@@ -186,8 +205,10 @@ func Info(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 	message := GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
-	_ = logger.logFile.Output(1, message)
-	if logger.verbosity >= LOGINFO {
+	if logger.fileVerbosity >= LOGINFO {
+		_ = logger.logFile.Output(1, message)
+	}
+	if logger.shellVerbosity >= LOGINFO {
 		_ = logger.logStdout.Output(1, message)
 	}
 }
@@ -204,8 +225,10 @@ func Verbose(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 	message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
-	_ = logger.logFile.Output(1, message)
-	if logger.verbosity >= LOGVERBOSE {
+	if logger.fileVerbosity >= LOGVERBOSE {
+		_ = logger.logFile.Output(1, message)
+	}
+	if logger.shellVerbosity >= LOGVERBOSE {
 		_ = logger.logStdout.Output(1, message)
 	}
 }
@@ -214,8 +237,10 @@ func Debug(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 	message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
-	_ = logger.logFile.Output(1, message)
-	if logger.verbosity >= LOGDEBUG {
+	if logger.fileVerbosity >= LOGDEBUG {
+		_ = logger.logFile.Output(1, message)
+	}
+	if logger.shellVerbosity >= LOGDEBUG {
 		_ = logger.logStdout.Output(1, message)
 	}
 }
@@ -244,7 +269,7 @@ func Fatal(err error, s string, v ...interface{}) {
 	}
 	message += strings.TrimSpace(fmt.Sprintf(s, v...))
 	_ = logger.logFile.Output(1, message+stackTraceStr)
-	if logger.verbosity >= LOGVERBOSE {
+	if logger.shellVerbosity >= LOGVERBOSE {
 		abort(message + stackTraceStr)
 	} else {
 		abort(message)
