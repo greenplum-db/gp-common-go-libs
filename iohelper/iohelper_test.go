@@ -63,7 +63,7 @@ var _ = Describe("operating/io tests", func() {
 			})
 		})
 		Describe("OpenFileForWriting", func() {
-			It("creates or opens the file for writing", func() {
+			It("creates or opens the file for writing, and truncates any existing content", func() {
 				var passedFlags int
 				operating.System.OpenFileWrite = func(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
 					passedFlags = flag
@@ -72,7 +72,7 @@ var _ = Describe("operating/io tests", func() {
 				fileHandle, err := iohelper.OpenFileForWriting("filename")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(fileHandle).To(Equal(os.Stdout))
-				Expect(passedFlags).To(Equal(os.O_CREATE | os.O_WRONLY))
+				Expect(passedFlags).To(Equal(os.O_CREATE | os.O_WRONLY | os.O_TRUNC))
 			})
 			It("returns an error if one is generated", func() {
 				operating.System.OpenFileWrite = func(name string, flag int, perm os.FileMode) (io.WriteCloser, error) {
