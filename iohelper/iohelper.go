@@ -97,6 +97,11 @@ func ReadLinesFromFile(filename string) ([]string, error) {
 	for scanner.Scan() {
 		contents = append(contents, scanner.Text())
 	}
+	err = fileHandle.Close()
+	if err != nil {
+		return nil, err
+	}
+
 	return contents, nil
 }
 
