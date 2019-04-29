@@ -193,6 +193,17 @@ public."bar%baz"`
 				Expect(err.Error()).To(Equal(errRead.Error()))
 				Expect(contents).To(BeNil())
 			})
+			It("returns an error if the file cannot be closed", func() {
+				operating.System.OpenFileRead = func(name string, flag int, perm os.FileMode) (operating.ReadCloserAt, error) {
+					myCloser := FailsClosing{}
+					return myCloser, nil
+				}
+				contents, err := iohelper.ReadLinesFromFile("/tmp/table_file")
+				Expect(err).To(HaveOccurred())
+
+				Expect(err.Error()).To(Equal("intentional closing failure"))
+				Expect(contents).To(BeNil())
+			})
 		})
 		Describe("MustReadLinesFromFile", func() {
 			It("reads a file containing multiple lines", func() {
@@ -215,3 +226,15 @@ public."bar%baz"`
 		})
 	})
 })
+
+type FailsClosing struct{}
+
+func (fc FailsClosing) Read(p []byte) (n int, err error) {
+	return 1, nil
+}
+func (fc FailsClosing) ReadAt(p []byte, off int64) (n int, err error) {
+	return 0, nil
+}
+func (fc FailsClosing) Close() error {
+	return errors.New("intentional closing failure")
+}
