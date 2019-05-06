@@ -36,6 +36,10 @@ var (
 	 * arise while running tests in parallel.
 	 */
 	logMutex sync.Mutex
+	/*
+	 * A function which can customize log file name
+	 */
+	logFileNameFunc		LogFileNameFunc
 )
 
 const (
@@ -77,6 +81,7 @@ const (
  *          the error message.
  */
 type LogPrefixFunc func(string) string
+type LogFileNameFunc func(string, string) string
 
 type GpLogger struct {
 	logStdout      *log.Logger
@@ -108,8 +113,14 @@ func InitializeLogging(program string, logdir string) {
 	}
 
 	createLogDirectory(logdir)
-	timestamp := operating.System.Now().Format("20060102")
-	logfile := fmt.Sprintf("%s/%s_%s.log", logdir, program, timestamp)
+
+	var logfile string
+	if logFileNameFunc != nil {
+		logfile = logFileNameFunc(program, logdir)
+	} else {
+		timestamp := operating.System.Now().Format("20060102")
+		logfile = fmt.Sprintf("%s/%s_%s.log", logdir, program, timestamp)
+	}
 	logFileHandle := openLogFile(logfile)
 
 	logger = NewLogger(os.Stdout, os.Stderr, logFileHandle, logfile, LOGINFO, program)
@@ -155,6 +166,10 @@ func GetHeader(program string) string {
 
 func SetLogPrefixFunc(logPrefixFunc func(string) string) {
 	logger.logPrefixFunc = logPrefixFunc
+}
+
+func SetLogFileNameFunc(fileNameFunc func(string, string) string) {
+	logFileNameFunc = fileNameFunc
 }
 
 func defaultLogPrefixFunc(level string) string {
@@ -284,6 +299,16 @@ func FatalOnError(err error, output ...string) {
 			Fatal(err, output[0])
 		}
 	}
+}
+
+func FatalWithoutPanic(s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
+	message := GetLogPrefix("CRITICAL") + fmt.Sprintf(s, v...)
+	errorCode = 1
+	_ = logger.logFile.Output(1, message)
+	_ = logger.logStderr.Output(1, message)
+	os.Exit(1)
 }
 
 type stackTracer interface {
