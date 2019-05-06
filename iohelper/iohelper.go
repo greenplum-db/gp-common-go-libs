@@ -43,7 +43,7 @@ func MustOpenFileForReading(filename string) operating.ReadCloserAt {
 }
 
 func OpenFileForWriting(filename string) (io.WriteCloser, error) {
-	flags := os.O_CREATE | os.O_WRONLY
+	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 	fileHandle, err := operating.System.OpenFileWrite(filename, flags, 0644)
 	if err != nil {
 		return nil, errors.Errorf("Unable to create or open file for writing: %s", err)
@@ -97,6 +97,11 @@ func ReadLinesFromFile(filename string) ([]string, error) {
 	for scanner.Scan() {
 		contents = append(contents, scanner.Text())
 	}
+	err = fileHandle.Close()
+	if err != nil {
+		return nil, err
+	}
+
 	return contents, nil
 }
 
