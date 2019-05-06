@@ -10,15 +10,11 @@
   version = "v3.5.1"
 
 [[projects]]
-  digest = "1:e00bfd00a52c601532de37c52a769661f3413f2f914aab980260336be319c8ad"
-  name = "github.com/greenplum-db/gp-golang-libpq"
-  packages = [
-    "gssapi",
-    "pq",
-    "pq/oid",
-  ]
+  digest = "1:27f1579eb6f830ed9c91c580d0e5eaaa91286d0082074616e3f246d5a9394896"
+  name = "github.com/greenplum-db/pq"
+  packages = ["."]
   pruneopts = "UT"
-  revision = "38ef0170f233e0c5d68ec8323798790a82bf88a1"
+  revision = "c8af9704a3a485956f921bc6c81f6e65800f3dcd"
 
 [[projects]]
   branch = "master"
@@ -175,7 +171,7 @@
   analyzer-version = 1
   input-imports = [
     "github.com/blang/semver",
-    "github.com/greenplum-db/gp-golang-libpq/pq",
+    "github.com/greenplum-db/pq",
     "github.com/jmoiron/sqlx",
     "github.com/onsi/ginkgo",
     "github.com/onsi/ginkgo/ginkgo",

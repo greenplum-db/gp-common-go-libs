@@ -13,7 +13,7 @@ import (
 
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
-	_ "github.com/greenplum-db/gp-golang-libpq/pq" // Need driver for postgres
+	_ "github.com/greenplum-db/pq" // Need driver for postgres
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )
