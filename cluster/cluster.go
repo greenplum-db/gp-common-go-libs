@@ -19,7 +19,7 @@ import (
 
 type Executor interface {
 	ExecuteLocalCommand(commandStr string) (string, error)
-	ExecuteClusterCommand(scope int, commandList []ShellCommand) *RemoteOutput
+	ExecuteClusterCommand(scope Scope, commandList []ShellCommand) *RemoteOutput
 }
 
 // This type only exists to allow us to mock Execute[...]Command functions for testing
@@ -39,7 +39,7 @@ type Cluster struct {
 	ContentIDs []int
 	Hostnames  []string
 	Segments   []SegConfig
-	ByContent  map[int]*SegConfig
+	ByContent  map[int][]*SegConfig
 	ByHost     map[string][]*SegConfig
 	Executor
 }
@@ -47,46 +47,98 @@ type Cluster struct {
 type SegConfig struct {
 	DbID      int
 	ContentID int
+	Role      string
 	Port      int
 	Hostname  string
 	DataDir   string
 }
 
 /*
- * We pass values from this enum into ShellCommands, RemoteOutputs, and associated
- * functions to define the nature and scope of the command execution.
- * - ON_SEGMENTS:            Execute on each segment, excluding the master.
- * - ON_SEGMENTS_AND_MASTER: Execute on each segment, including the master.
- * - ON_HOSTS:               Execute on each host, excluding the master host.
- * - ON_HOSTS_AND_MASTER:    Execute on each host, including the master host.
+ * A "scope" is a value composed of one or more of the below constants that is
+ * passed into ShellCommands, RemoteOutputs, and related structs and functions
+ * to define the scope of the command execution.  The meaning of each value is
+ * as follows:
  *
- * - ON_MASTER_TO_SEGMENTS:            Execute commands on master about segments, excluding master.
- * - ON_MASTER_TO_SEGMENTS_AND_MASTER: Execute commands on master about segments, including master.
- * - ON_MASTER_TO_HOSTS:               Execute commands on master about hosts, excluding master.
- * - ON_MASTER_TO_HOSTS_AND_MASTER:    Execute commands on master about hosts, including master.
+ * ON_SEGMENTS:     Execute one command per segment.
+ * ON_HOSTS:        Execute one command per host.
+ *
+ * INCLUDE_MASTER:  Include the master host or segment in the command list.
+ * EXCLUDE_MASTER:  Exclude the master host or segment from the command list.
+ *
+ * ON_REMOTE:       Execute each command on the specified remote segment/host.
+ * ON_LOCAL:        Execute all commands on the master host.
+ *
+ * INCLUDE_MIRRORS: Include mirror segments and hosts in the command list.
+ * EXCLUDE_MIRRORS: Exclude mirror segments and hosts from the command list.
+ *
+ * A scope is composed of one or more of these values bitwise-OR'd together to
+ * obtain a final scope, which has the following bitmask:
+ *
+ *   /------- INCLUDE_MIRRORS (1) or EXCLUDE_MIRRORS (0)
+ *   |/------ INCLUDE_MASTER (1) or EXCLUDE_MASTER (0)
+ *   ||/----- ON_LOCAL (1) or ON_REMOTE (0)
+ *   |||/---- ON_HOSTS (1) or ON_SEGMENTS (0)
+ *   ||||
+ *   vvvv
+ *   0000
+ *
+ * For instance, to execute a command on all hosts including the master host,
+ * you would pass a function the scope ON_HOSTS | INCLUDE_MASTER.
+ *
+ * The default scope is 0000, to execute a command on all primary segments,
+ * equivalent to ON_SEGMENTS | ON_REMOTE | EXCLUDE_MASTER | EXCLUDE_MIRRORS,
+ * though by convention only ON_SEGMENTS need be passed to a function.
+ *
+ * Technically, the four zero-valued constants are redundant, but are provided
+ * so that function callers can specify whatever scope they feel is most clear
+ * (e.g. using INCLUDE_MASTER vs. EXCLUDE_MASTER as the basic scopes instead of
+ * ON_SEGMENTS vs. ON_HOSTS if every ExecuteClusterCommand call is per-segment
+ * and the utility includes the master in commands a good portion of the time.)
  */
-const (
-	ON_SEGMENTS = iota
-	ON_SEGMENTS_AND_MASTER
-	ON_HOSTS
-	ON_HOSTS_AND_MASTER
 
-	ON_MASTER_TO_SEGMENTS
-	ON_MASTER_TO_SEGMENTS_AND_MASTER
-	ON_MASTER_TO_HOSTS
-	ON_MASTER_TO_HOSTS_AND_MASTER
+type Scope uint8
+
+const (
+	ON_SEGMENTS     Scope = 0
+	ON_HOSTS        Scope = 1
+	EXCLUDE_MASTER  Scope = 0
+	INCLUDE_MASTER  Scope = 1 << 1
+	ON_REMOTE       Scope = 0
+	ON_LOCAL        Scope = 1 << 2
+	EXCLUDE_MIRRORS Scope = 0
+	INCLUDE_MIRRORS Scope = 1 << 3
 )
 
-func scopeIsRemote(scope int) bool {
-	return scope == ON_SEGMENTS || scope == ON_SEGMENTS_AND_MASTER || scope == ON_HOSTS || scope == ON_HOSTS_AND_MASTER
+func scopeIsSegments(scope Scope) bool {
+	return scope&ON_HOSTS == ON_SEGMENTS
 }
 
-func scopeIncludesMaster(scope int) bool {
-	return scope == ON_SEGMENTS_AND_MASTER || scope == ON_MASTER_TO_SEGMENTS_AND_MASTER || scope == ON_HOSTS_AND_MASTER || scope == ON_MASTER_TO_HOSTS_AND_MASTER
+func scopeIsHosts(scope Scope) bool {
+	return scope&ON_HOSTS == ON_HOSTS
 }
 
-func scopeIsHosts(scope int) bool {
-	return scope == ON_HOSTS || scope == ON_HOSTS_AND_MASTER || scope == ON_MASTER_TO_HOSTS || scope == ON_MASTER_TO_HOSTS_AND_MASTER
+func scopeExcludesMaster(scope Scope) bool {
+	return scope&INCLUDE_MASTER == EXCLUDE_MASTER
+}
+
+func scopeIncludesMaster(scope Scope) bool {
+	return scope&INCLUDE_MASTER == INCLUDE_MASTER
+}
+
+func scopeIsRemote(scope Scope) bool {
+	return scope&ON_LOCAL == ON_REMOTE
+}
+
+func scopeIsLocal(scope Scope) bool {
+	return scope&ON_LOCAL == ON_LOCAL
+}
+
+func scopeExcludesMirrors(scope Scope) bool {
+	return scope&INCLUDE_MIRRORS == EXCLUDE_MIRRORS
+}
+
+func scopeIncludesMirrors(scope Scope) bool {
+	return scope&INCLUDE_MIRRORS == INCLUDE_MIRRORS
 }
 
 /*
@@ -100,7 +152,7 @@ func scopeIsHosts(scope int) bool {
  * and Content to -2 for per-host commands, just to be safe.
  */
 type ShellCommand struct {
-	Scope         int
+	Scope         Scope
 	Content       int
 	Host          string
 	Command       *exec.Cmd
@@ -110,7 +162,7 @@ type ShellCommand struct {
 	Error         error
 }
 
-func NewShellCommand(scope int, content int, host string, command []string) ShellCommand {
+func NewShellCommand(scope Scope, content int, host string, command []string) ShellCommand {
 	return ShellCommand{
 		Scope:         scope,
 		Content:       content,
@@ -125,13 +177,13 @@ func NewShellCommand(scope int, content int, host string, command []string) Shel
  * of a cluster command and to display the results to the user.
  */
 type RemoteOutput struct {
-	Scope          int
+	Scope          Scope
 	NumErrors      int
 	Commands       []ShellCommand
 	FailedCommands []*ShellCommand
 }
 
-func NewRemoteOutput(scope int, numErrors int, commands []ShellCommand) *RemoteOutput {
+func NewRemoteOutput(scope Scope, numErrors int, commands []ShellCommand) *RemoteOutput {
 	failedCommands := make([]*ShellCommand, numErrors)
 	index := 0
 	for i := range commands {
@@ -155,12 +207,21 @@ func NewRemoteOutput(scope int, numErrors int, commands []ShellCommand) *RemoteO
 func NewCluster(segConfigs []SegConfig) *Cluster {
 	cluster := Cluster{}
 	cluster.Segments = segConfigs
-	cluster.ByContent = make(map[int]*SegConfig, len(segConfigs))
+	cluster.ByContent = make(map[int][]*SegConfig, 0)
 	cluster.ByHost = make(map[string][]*SegConfig, 0)
 	for i := range cluster.Segments {
 		segment := &cluster.Segments[i]
 		cluster.ContentIDs = append(cluster.ContentIDs, segment.ContentID)
-		cluster.ByContent[segment.ContentID] = segment
+		cluster.ByContent[segment.ContentID] = append(cluster.ByContent[segment.ContentID], segment)
+		segmentList := cluster.ByContent[segment.ContentID]
+		if len(segmentList) == 2 && segmentList[0].Role == "m" {
+			/*
+			 * GetSegmentConfiguration always returns primaries before mirrors,
+			 * but we can't guarantee the []SegConfig passed in was created by
+			 * GetSegmentConfiguration, so if the mirror is first, swap them.
+			 */
+			segmentList[0], segmentList[1] = segmentList[1], segmentList[0]
+		}
 		cluster.ByHost[segment.Hostname] = append(cluster.ByHost[segment.Hostname], segment)
 		if len(cluster.ByHost[segment.Hostname]) == 1 { // Only add each hostname once
 			cluster.Hostnames = append(cluster.Hostnames, segment.Hostname)
@@ -180,19 +241,19 @@ func NewCluster(segConfigs []SegConfig) *Cluster {
  * the kind of command they're generating, as opposed to having to pass in both
  * content and hostname regardless of scope or using some sort of helper struct.
  */
-func (cluster *Cluster) GenerateCommandList(scope int, generator interface{}) []ShellCommand {
+func (cluster *Cluster) GenerateCommandList(scope Scope, generator interface{}) []ShellCommand {
 	var commands []ShellCommand
 	switch generateCommand := generator.(type) {
 	case func(content int) []string:
 		for _, content := range cluster.ContentIDs {
-			if content == -1 && !scopeIncludesMaster(scope) {
+			if content == -1 && scopeExcludesMaster(scope) {
 				continue
 			}
 			commands = append(commands, NewShellCommand(scope, content, "", generateCommand(content)))
 		}
 	case func(host string) []string:
 		for _, host := range cluster.Hostnames {
-			if host == cluster.GetHostForContent(-1) && !scopeIncludesMaster(scope) &&
+			if host == cluster.GetHostForContent(-1) && scopeExcludesMaster(scope) &&
 				len(cluster.GetContentsForHost(host)) == 1 { // Only exclude the master host if there are no local segments
 				continue
 			}
@@ -217,19 +278,19 @@ func ConstructSSHCommand(useLocal bool, host string, cmd string) []string {
  * This function essentially wraps GenerateCommandList such that commands to be
  * executed on other hosts are sent through SSH and local commands use Bash.
  */
-func (cluster *Cluster) GenerateSSHCommandList(scope int, generator interface{}) []ShellCommand {
+func (cluster *Cluster) GenerateSSHCommandList(scope Scope, generator interface{}) []ShellCommand {
 	var commands []ShellCommand
 	localHost := cluster.GetHostForContent(-1)
 	switch generateCommand := generator.(type) {
 	case func(content int) string:
 		commands = cluster.GenerateCommandList(scope, func(content int) []string {
-			useLocal := (cluster.GetHostForContent(content) == localHost || !scopeIsRemote(scope))
+			useLocal := (cluster.GetHostForContent(content) == localHost || scopeIsLocal(scope))
 			cmd := generateCommand(content)
 			return ConstructSSHCommand(useLocal, cluster.GetHostForContent(content), cmd)
 		})
 	case func(host string) string:
 		commands = cluster.GenerateCommandList(scope, func(host string) []string {
-			useLocal := (host == localHost || !scopeIsRemote(scope))
+			useLocal := (host == localHost || scopeIsLocal(scope))
 			cmd := generateCommand(host)
 			return ConstructSSHCommand(useLocal, host, cmd)
 		})
@@ -248,7 +309,7 @@ func (executor *GPDBExecutor) ExecuteLocalCommand(commandStr string) (string, er
  * RemoteOutput after execution.
  * TODO: Add batching to prevent bottlenecks when executing in a huge cluster.
  */
-func (executor *GPDBExecutor) ExecuteClusterCommand(scope int, commandList []ShellCommand) *RemoteOutput {
+func (executor *GPDBExecutor) ExecuteClusterCommand(scope Scope, commandList []ShellCommand) *RemoteOutput {
 	length := len(commandList)
 	finished := make(chan int)
 	numErrors := 0
@@ -283,7 +344,7 @@ func (executor *GPDBExecutor) ExecuteClusterCommand(scope int, commandList []She
  * 2. shell commands on master to push to remote hosts.
  *    - e.g. running multiple scps on master to push a file to all segments
  */
-func (cluster *Cluster) GenerateAndExecuteCommand(verboseMsg string, scope int, generator interface{}) *RemoteOutput {
+func (cluster *Cluster) GenerateAndExecuteCommand(verboseMsg string, scope Scope, generator interface{}) *RemoteOutput {
 	gplog.Verbose(verboseMsg)
 	commandList := cluster.GenerateSSHCommandList(scope, generator)
 	return cluster.ExecuteClusterCommand(scope, commandList)
@@ -314,9 +375,9 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 	}
 }
 
-func LogFatalClusterError(errMessage string, scope int, numErrors int) {
+func LogFatalClusterError(errMessage string, scope Scope, numErrors int) {
 	str := " on"
-	if !scopeIsRemote(scope) {
+	if scopeIsLocal(scope) {
 		str += " master for"
 	}
 	errMessage += str
@@ -331,20 +392,35 @@ func LogFatalClusterError(errMessage string, scope int, numErrors int) {
 	gplog.Fatal(errors.Errorf("%s %d %s. See %s for a complete list of errors.", errMessage, numErrors, segMsg, gplog.GetLogFilePath()), "")
 }
 
-func (cluster *Cluster) GetDbidForContent(contentID int) int {
-	return cluster.ByContent[contentID].DbID
+/*
+ * Due to how NewCluster sets up ByContent, each content key points to a pair
+ * of segments with the primary first and mirror second.  As most users of
+ * Cluster are only going to care about primaries, by default each of the
+ * Get[Foo]ForContent functions below returns the primary value by default,
+ * and an optional parameter can be passed to specify which value is desired.
+ */
+
+func getSegmentByRole(segmentList []*SegConfig, role ...string) *SegConfig {
+	if len(role) == 1 && role[0] == "m" {
+		return segmentList[1]
+	}
+	return segmentList[0]
 }
 
-func (cluster *Cluster) GetPortForContent(contentID int) int {
-	return cluster.ByContent[contentID].Port
+func (cluster *Cluster) GetDbidForContent(contentID int, role ...string) int {
+	return getSegmentByRole(cluster.ByContent[contentID], role...).DbID
 }
 
-func (cluster *Cluster) GetHostForContent(contentID int) string {
-	return cluster.ByContent[contentID].Hostname
+func (cluster *Cluster) GetPortForContent(contentID int, role ...string) int {
+	return getSegmentByRole(cluster.ByContent[contentID], role...).Port
 }
 
-func (cluster *Cluster) GetDirForContent(contentID int) string {
-	return cluster.ByContent[contentID].DataDir
+func (cluster *Cluster) GetHostForContent(contentID int, role ...string) string {
+	return getSegmentByRole(cluster.ByContent[contentID], role...).Hostname
+}
+
+func (cluster *Cluster) GetDirForContent(contentID int, role ...string) string {
+	return getSegmentByRole(cluster.ByContent[contentID], role...).DataDir
 }
 
 func (cluster *Cluster) GetDbidsForHost(hostname string) []int {
@@ -383,32 +459,43 @@ func (cluster *Cluster) GetDirsForHost(hostname string) []string {
  * Helper functions
  */
 
-func GetSegmentConfiguration(connection *dbconn.DBConn) ([]SegConfig, error) {
+func GetSegmentConfiguration(connection *dbconn.DBConn, getMirrors ...bool) ([]SegConfig, error) {
+	includeMirrors := len(getMirrors) == 1 && getMirrors[0]
 	query := ""
 	if connection.Version.Before("6") {
-		query = `
+		whereClause := "WHERE s.role = 'p' AND f.fsname = 'pg_system'"
+		if includeMirrors {
+			whereClause = "WHERE f.fsname = 'pg_system'"
+		}
+		query = fmt.Sprintf(`
 SELECT
 	s.dbid,
 	s.content as contentid,
+	s.role,
 	s.port,
 	s.hostname,
 	e.fselocation as datadir
 FROM gp_segment_configuration s
 JOIN pg_filespace_entry e ON s.dbid = e.fsedbid
 JOIN pg_filespace f ON e.fsefsoid = f.oid
-WHERE s.role = 'p' AND f.fsname = 'pg_system'
-ORDER BY s.content;`
+%s
+ORDER BY s.content, s.role DESC;`, whereClause)
 	} else {
-		query = `
+		whereClause := "WHERE role = 'p'"
+		if includeMirrors {
+			whereClause = ""
+		}
+		query = fmt.Sprintf(`
 SELECT
 	dbid,
 	content as contentid,
+	role,
 	port,
 	hostname,
 	datadir
 FROM gp_segment_configuration
-WHERE role = 'p'
-ORDER BY content;`
+%s
+ORDER BY content, role DESC;`, whereClause)
 	}
 
 	results := make([]SegConfig, 0)
