@@ -79,6 +79,7 @@ const (
  * - Fatal: Messages indicating that the program cannot proceed, e.g. the database
  *          cannot be reached.  This function will exit the program after printing
  *          the error message.
+ * - FatalWithoutPanic: Same as Fatal, but will not trigger panic. Just exit(1).
  */
 type LogPrefixFunc func(string) string
 type LogFileNameFunc func(string, string) string
@@ -305,7 +306,7 @@ func FatalWithoutPanic(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 	message := GetLogPrefix("CRITICAL") + fmt.Sprintf(s, v...)
-	errorCode = 1
+	errorCode = 2
 	_ = logger.logFile.Output(1, message)
 	_ = logger.logStderr.Output(1, message)
 	os.Exit(1)
