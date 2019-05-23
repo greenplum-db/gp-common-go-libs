@@ -40,6 +40,7 @@ var (
 	 * A function which can customize log file name
 	 */
 	logFileNameFunc		LogFileNameFunc
+	exitFunc	   		ExitFunc
 )
 
 const (
@@ -83,6 +84,7 @@ const (
  */
 type LogPrefixFunc func(string) string
 type LogFileNameFunc func(string, string) string
+type ExitFunc func()
 
 type GpLogger struct {
 	logStdout      *log.Logger
@@ -115,6 +117,14 @@ func InitializeLogging(program string, logdir string) {
 
 	createLogDirectory(logdir)
 
+	logfile := GenerateLogFileName(program, logdir)
+	logFileHandle := openLogFile(logfile)
+
+	logger = NewLogger(os.Stdout, os.Stderr, logFileHandle, logfile, LOGINFO, program)
+	SetExitFunc(defaultExit)
+}
+
+func GenerateLogFileName(program, logdir string) string {
 	var logfile string
 	if logFileNameFunc != nil {
 		logfile = logFileNameFunc(program, logdir)
@@ -122,9 +132,7 @@ func InitializeLogging(program string, logdir string) {
 		timestamp := operating.System.Now().Format("20060102")
 		logfile = fmt.Sprintf("%s/%s_%s.log", logdir, program, timestamp)
 	}
-	logFileHandle := openLogFile(logfile)
-
-	logger = NewLogger(os.Stdout, os.Stderr, logFileHandle, logfile, LOGINFO, program)
+	return logfile
 }
 
 func SetLogger(log *GpLogger) {
@@ -171,6 +179,10 @@ func SetLogPrefixFunc(logPrefixFunc func(string) string) {
 
 func SetLogFileNameFunc(fileNameFunc func(string, string) string) {
 	logFileNameFunc = fileNameFunc
+}
+
+func SetExitFunc(pExitFunc func()) {
+	exitFunc = pExitFunc
 }
 
 func defaultLogPrefixFunc(level string) string {
@@ -309,7 +321,7 @@ func FatalWithoutPanic(s string, v ...interface{}) {
 	errorCode = 2
 	_ = logger.logFile.Output(1, message)
 	_ = logger.logStderr.Output(1, message)
-	os.Exit(1)
+	exitFunc()
 }
 
 type stackTracer interface {
@@ -363,4 +375,8 @@ func createLogDirectory(dirname string) {
 	} else if !(info.IsDir()) {
 		abort(errors.Errorf("%s is a file, not a directory", dirname))
 	}
+}
+
+func defaultExit() {
+	os.Exit(1)
 }
