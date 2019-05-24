@@ -36,6 +36,11 @@ var (
 	 * arise while running tests in parallel.
 	 */
 	logMutex sync.Mutex
+	/*
+	 * A function which can customize log file name
+	 */
+	logFileNameFunc		LogFileNameFunc
+	exitFunc	   		ExitFunc
 )
 
 const (
@@ -75,8 +80,11 @@ const (
  * - Fatal: Messages indicating that the program cannot proceed, e.g. the database
  *          cannot be reached.  This function will exit the program after printing
  *          the error message.
+ * - FatalWithoutPanic: Same as Fatal, but will not trigger panic. Just exit(1).
  */
 type LogPrefixFunc func(string) string
+type LogFileNameFunc func(string, string) string
+type ExitFunc func()
 
 type GpLogger struct {
 	logStdout      *log.Logger
@@ -108,11 +116,23 @@ func InitializeLogging(program string, logdir string) {
 	}
 
 	createLogDirectory(logdir)
-	timestamp := operating.System.Now().Format("20060102")
-	logfile := fmt.Sprintf("%s/%s_%s.log", logdir, program, timestamp)
+
+	logfile := GenerateLogFileName(program, logdir)
 	logFileHandle := openLogFile(logfile)
 
 	logger = NewLogger(os.Stdout, os.Stderr, logFileHandle, logfile, LOGINFO, program)
+	SetExitFunc(defaultExit)
+}
+
+func GenerateLogFileName(program, logdir string) string {
+	var logfile string
+	if logFileNameFunc != nil {
+		logfile = logFileNameFunc(program, logdir)
+	} else {
+		timestamp := operating.System.Now().Format("20060102")
+		logfile = fmt.Sprintf("%s/%s_%s.log", logdir, program, timestamp)
+	}
+	return logfile
 }
 
 func SetLogger(log *GpLogger) {
@@ -155,6 +175,14 @@ func GetHeader(program string) string {
 
 func SetLogPrefixFunc(logPrefixFunc func(string) string) {
 	logger.logPrefixFunc = logPrefixFunc
+}
+
+func SetLogFileNameFunc(fileNameFunc func(string, string) string) {
+	logFileNameFunc = fileNameFunc
+}
+
+func SetExitFunc(pExitFunc func()) {
+	exitFunc = pExitFunc
 }
 
 func defaultLogPrefixFunc(level string) string {
@@ -286,6 +314,16 @@ func FatalOnError(err error, output ...string) {
 	}
 }
 
+func FatalWithoutPanic(s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
+	message := GetLogPrefix("CRITICAL") + fmt.Sprintf(s, v...)
+	errorCode = 2
+	_ = logger.logFile.Output(1, message)
+	_ = logger.logStderr.Output(1, message)
+	exitFunc()
+}
+
 type stackTracer interface {
 	StackTrace() errors.StackTrace
 }
@@ -337,4 +375,8 @@ func createLogDirectory(dirname string) {
 	} else if !(info.IsDir()) {
 		abort(errors.Errorf("%s is a file, not a directory", dirname))
 	}
+}
+
+func defaultExit() {
+	os.Exit(1)
 }

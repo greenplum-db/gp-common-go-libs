@@ -499,6 +499,16 @@ var _ = Describe("logger/log tests", func() {
 					gplog.Fatal(errors.New(expectedMessage), "")
 				})
 			})
+			Context("FatalWithoutPanic", func() {
+				It("prints to the log file, then exit(1)", func() {
+					gplog.SetExitFunc(func() {})
+					expectedMessage := "logfile error fatalwithoutpanic"
+					gplog.FatalWithoutPanic(expectedMessage)
+					testhelper.NotExpectRegexp(stdout, fatalExpected+expectedMessage)
+					testhelper.ExpectRegexp(stderr, fatalExpected+expectedMessage)
+					testhelper.ExpectRegexp(logfile, fatalExpected+expectedMessage)
+				})
+			})
 		})
 	})
 })
