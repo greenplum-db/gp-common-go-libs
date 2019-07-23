@@ -78,6 +78,7 @@ type GpLogger struct {
 	logStdout     *log.Logger
 	logStderr     *log.Logger
 	logFile       *log.Logger
+	logFileHandle io.WriteCloser
 	logFileName   string
 	verbosity     int
 	header        string
@@ -108,6 +109,23 @@ func InitializeLogging(program string, logdir string) {
 	logFileHandle := openLogFile(logfile)
 
 	logger = NewLogger(os.Stdout, os.Stderr, logFileHandle, logfile, LOGINFO, program)
+	logger.logFileHandle = logFileHandle
+}
+
+/*
+* golog should consider about the reinitializeLogging for the log rotating scenario.
+* log rotate move the old log file when condition was satisfied, then send a SIGUSR1
+* signal to current process, the log subsystem should close the old log file handler
+* and create a new one safely
+ */
+func ReinitializeLogging(program string, logdir string) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
+	if logger != nil {
+		logger.logFileHandle.Close()
+		logger = nil
+	}
+	InitializeLogging(program, logdir)
 }
 
 func SetLogger(log *GpLogger) {
