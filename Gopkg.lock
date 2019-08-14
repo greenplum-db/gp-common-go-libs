@@ -10,11 +10,11 @@
   version = "v3.5.1"
 
 [[projects]]
-  digest = "1:27f1579eb6f830ed9c91c580d0e5eaaa91286d0082074616e3f246d5a9394896"
+  digest = "1:259e7c42312338d6b0fa0bdbf1b17cbffb6a9418d8f54b5db9fc7f9d235da91b"
   name = "github.com/greenplum-db/pq"
   packages = ["."]
   pruneopts = "UT"
-  revision = "c8af9704a3a485956f921bc6c81f6e65800f3dcd"
+  revision = "2117ae33d19fe1acd27a76af35635ea02648b41d"
 
 [[projects]]
   branch = "master"
