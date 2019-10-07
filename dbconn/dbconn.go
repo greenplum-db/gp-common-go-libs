@@ -6,6 +6,7 @@ package dbconn
  */
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -254,6 +255,19 @@ func (dbconn *DBConn) Exec(query string, whichConn ...int) (sql.Result, error) {
 
 func (dbconn *DBConn) MustExec(query string, whichConn ...int) {
 	_, err := dbconn.Exec(query, whichConn...)
+	gplog.FatalOnError(err)
+}
+
+func (dbconn *DBConn) ExecContext(queryContext context.Context, query string, whichConn ...int) (sql.Result, error) {
+	connNum := dbconn.ValidateConnNum(whichConn...)
+	if dbconn.Tx[connNum] != nil {
+		return dbconn.Tx[connNum].ExecContext(queryContext, query)
+	}
+	return dbconn.ConnPool[connNum].ExecContext(queryContext, query)
+}
+
+func (dbconn *DBConn) MustExecContext(queryContext context.Context, query string, whichConn ...int) {
+	_, err := dbconn.ExecContext(queryContext, query, whichConn...)
 	gplog.FatalOnError(err)
 }
 

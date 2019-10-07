@@ -1,6 +1,7 @@
 package dbconn_test
 
 import (
+	"context"
 	"database/sql/driver"
 	"fmt"
 	"os"
@@ -177,6 +178,36 @@ var _ = Describe("dbconn/dbconn tests", func() {
 
 			connection.MustBegin()
 			res, err := connection.Exec("INSERT INTO pg_tables VALUES ('schema', 'table')")
+			connection.MustCommit()
+			Expect(err).ToNot(HaveOccurred())
+			rowsReturned, err := res.RowsAffected()
+			Expect(rowsReturned).To(Equal(int64(1)))
+		})
+	})
+	Describe("DBConn.ExecContext", func() {
+		It("executes an INSERT outside of a transaction", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			fakeResult := testhelper.TestResult{Rows: 1}
+			mock.ExpectExec("INSERT (.*)").WillReturnResult(fakeResult)
+
+			res, err := connection.ExecContext(ctx, "INSERT INTO pg_tables VALUES ('schema', 'table')")
+			Expect(err).ToNot(HaveOccurred())
+			rowsReturned, err := res.RowsAffected()
+			Expect(rowsReturned).To(Equal(int64(1)))
+		})
+		It("executes an INSERT in a transaction", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			fakeResult := testhelper.TestResult{Rows: 1}
+			ExpectBegin(mock)
+			mock.ExpectExec("INSERT (.*)").WillReturnResult(fakeResult)
+			mock.ExpectCommit()
+
+			connection.MustBegin()
+			res, err := connection.ExecContext(ctx, "INSERT INTO pg_tables VALUES ('schema', 'table')")
 			connection.MustCommit()
 			Expect(err).ToNot(HaveOccurred())
 			rowsReturned, err := res.RowsAffected()
