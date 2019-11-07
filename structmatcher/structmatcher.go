@@ -6,11 +6,11 @@ package structmatcher
 
 import (
 	"reflect"
-
 	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/types"
 )
 
 /*
@@ -86,4 +86,49 @@ func ExpectStructsToMatchIncluding(expected interface{}, actual interface{}, inc
 	if len(mismatches) > 0 {
 		Fail(strings.Join(mismatches, "\n"))
 	}
+}
+
+type Matcher struct {
+	expected        interface{}
+	includingFields []string
+	excludingFields []string
+	mismatches      []string
+}
+
+var _ types.GomegaMatcher = &Matcher{}
+
+func MatchStruct(expected interface{}) *Matcher {
+	return &Matcher{
+		expected: expected,
+	}
+}
+
+func (m *Matcher) Match(actual interface{}) (success bool, err error) {
+	if m.includingFields != nil {
+		m.mismatches = StructMatcher(m.expected, actual, true, true, m.includingFields...)
+	} else if m.excludingFields != nil {
+		m.mismatches = StructMatcher(m.expected, actual, true, false, m.excludingFields...)
+	} else {
+		m.mismatches = StructMatcher(m.expected, actual, false, false)
+	}
+	return len(m.mismatches) == 0, nil
+}
+
+func (m *Matcher) FailureMessage(actual interface{}) (message string) {
+	//return format.Message(actual, "to match struct", m.expected)
+	return "Expected structs to match but:\n"+strings.Join(m.mismatches, "\n")
+}
+
+func (m *Matcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return "Expected structs not to match, but they did"
+}
+
+func (m *Matcher) IncludingFields(fields ...string) *Matcher {
+	m.includingFields = fields
+	return m
+}
+
+func (m *Matcher) ExcludingFields(fields ...string) *Matcher {
+	m.excludingFields = fields
+	return m
 }
