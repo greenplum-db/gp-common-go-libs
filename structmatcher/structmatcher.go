@@ -5,6 +5,7 @@ package structmatcher
  */
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -20,7 +21,11 @@ import (
  * To filter on a field "fieldname" in a nested struct under field "structfield", pass in "structfield.fieldname".
  * This function assumes structs will only ever be nested one level deep.
  */
-func StructMatcher(expected interface{}, actual interface{}, shouldFilter bool, filterInclude bool, filterFields ...string) []string {
+func StructMatcher(expected, actual interface{}, shouldFilter bool, filterInclude bool, filterFields ...string) []string {
+	return structMatcher(reflect.ValueOf(expected), reflect.ValueOf(actual), "", shouldFilter, filterInclude, filterFields...)
+}
+
+func structMatcher(expected, actual reflect.Value, fieldPath string, shouldFilter bool, filterInclude bool, filterFields ...string) []string {
 	// Add field names for the top-level struct to a filter map, and split off nested field names to pass down to nested structs
 	filterMap := make(map[string]bool)
 	nestedFilterFields := make([]string, 0)
@@ -36,8 +41,8 @@ func StructMatcher(expected interface{}, actual interface{}, shouldFilter bool, 
 			filterMap[filterFields[i]] = true
 		}
 	}
-	expectedStruct := reflect.Indirect(reflect.ValueOf(expected))
-	actualStruct := reflect.Indirect(reflect.ValueOf(actual))
+	expectedStruct := reflect.Indirect(expected)
+	actualStruct := reflect.Indirect(actual)
 	mismatches := []string{}
 	mismatches = append(mismatches, InterceptGomegaFailures(func() {
 		for i := 0; i < expectedStruct.NumField(); i++ {
@@ -53,18 +58,20 @@ func StructMatcher(expected interface{}, actual interface{}, shouldFilter bool, 
 			fieldIsStructSlice := actualFieldIsNonemptySlice && expectedFieldIsNonemptySlice && actualField.Len() == expectedField.Len() && actualField.Index(0).Kind() == reflect.Struct
 			if fieldIsStructSlice {
 				for j := 0; j < actualField.Len(); j++ {
-					expectedStructField := expectedStruct.Field(i).Index(j).Interface()
-					actualStructField := actualStruct.Field(i).Index(j).Interface()
-					mismatches = append(mismatches, StructMatcher(expectedStructField, actualStructField, shouldFilter, filterInclude, nestedFilterFields...)...)
+					expectedStructField := expectedStruct.Field(i).Index(j)
+					actualStructField := actualStruct.Field(i).Index(j)
+					subFieldPath := fmt.Sprintf("%s%s[%d].", fieldPath, fieldName, j)
+					mismatches = append(mismatches, structMatcher(expectedStructField, actualStructField, subFieldPath, shouldFilter, filterInclude, nestedFilterFields...)...)
 				}
 			} else if actualField.Kind() == reflect.Struct {
-				expectedStructField := expectedStruct.Field(i).Interface()
-				actualStructField := actualStruct.Field(i).Interface()
-				mismatches = append(mismatches, StructMatcher(expectedStructField, actualStructField, shouldFilter, filterInclude, nestedFilterFields...)...)
+				expectedStructField := expectedStruct.Field(i)
+				actualStructField := actualStruct.Field(i)
+				subFieldPath := fmt.Sprintf("%s%s.", fieldPath, fieldName)
+				mismatches = append(mismatches, structMatcher(expectedStructField, actualStructField, subFieldPath, shouldFilter, filterInclude, nestedFilterFields...)...)
 			} else {
 				expectedValue := expectedStruct.Field(i).Interface()
 				actualValue := actualStruct.Field(i).Interface()
-				Expect(actualValue).To(Equal(expectedValue), "Mismatch on field %s", fieldName)
+				Expect(actualValue).To(Equal(expectedValue), "Mismatch on field %s%s", fieldPath, fieldName)
 			}
 		}
 	})...)
@@ -122,7 +129,6 @@ func (m *Matcher) Match(actual interface{}) (success bool, err error) {
 }
 
 func (m *Matcher) FailureMessage(actual interface{}) (message string) {
-	//return format.Message(actual, "to match struct", m.expected)
 	return "Expected structs to match but:\n" + strings.Join(m.mismatches, "\n")
 }
 
