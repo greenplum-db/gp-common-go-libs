@@ -41,8 +41,8 @@ func StructMatcher(expected interface{}, actual interface{}, shouldFilter bool, 
 	mismatches := []string{}
 	mismatches = append(mismatches, InterceptGomegaFailures(func() {
 		for i := 0; i < expectedStruct.NumField(); i++ {
-			expectedField := expectedStruct.Field(i)
-			actualField := actualStruct.Field(i)
+			expectedField := reflect.Indirect(expectedStruct.Field(i))
+			actualField := reflect.Indirect(actualStruct.Field(i))
 			fieldName := actualStruct.Type().Field(i).Name
 			// If we're including, skip this field if the name doesn't match; if we're excluding, skip if it does match
 			if shouldFilter && ((filterInclude && !filterMap[fieldName]) || (!filterInclude && filterMap[fieldName])) {
@@ -57,6 +57,10 @@ func StructMatcher(expected interface{}, actual interface{}, shouldFilter bool, 
 					actualStructField := actualStruct.Field(i).Index(j).Interface()
 					mismatches = append(mismatches, StructMatcher(expectedStructField, actualStructField, shouldFilter, filterInclude, nestedFilterFields...)...)
 				}
+			} else if actualField.Kind() == reflect.Struct {
+				expectedStructField := expectedStruct.Field(i).Interface()
+				actualStructField := actualStruct.Field(i).Interface()
+				mismatches = append(mismatches, StructMatcher(expectedStructField, actualStructField, shouldFilter, filterInclude, nestedFilterFields...)...)
 			} else {
 				expectedValue := expectedStruct.Field(i).Interface()
 				actualValue := actualStruct.Field(i).Interface()

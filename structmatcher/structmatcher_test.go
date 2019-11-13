@@ -23,6 +23,8 @@ var _ = Describe("structmatcher.StructMatchers", func() {
 		Field1      int
 		Field2      string
 		NestedSlice []SimpleStruct
+		Struct      SimpleStruct
+		PtrStruct   *SimpleStruct
 	}
 	Describe("structmatcher.StructMatcher", func() {
 		It("returns no failures for the same structs", func() {
@@ -77,6 +79,22 @@ var _ = Describe("structmatcher.StructMatchers", func() {
 			mismatches := structmatcher.StructMatcher(&struct1, &struct2, true, false, "NestedSlice.Field1")
 			Expect(len(mismatches)).To(Equal(1))
 			Expect(mismatches[0]).To(Equal("Mismatch on field Field2\nExpected\n    <string>: teststruct2\nto equal\n    <string>: message1"))
+		})
+		It("returns mismatches in nested structs", func() {
+			struct1 := NestedStruct{Struct: SimpleStruct{Field1: 7}}
+			struct2 := NestedStruct{Struct: SimpleStruct{Field1: 8}}
+			mismatches := structmatcher.StructMatcher(&struct1, &struct2, false, false)
+			Expect(len(mismatches)).To(Equal(1))
+			// TODO: would be better if this was "Mismatch on field Struct1.Field1..."
+			Expect(mismatches[0]).To(Equal("Mismatch on field Field1\nExpected\n    <int>: 8\nto equal\n    <int>: 7"))
+		})
+		It("returns mismatches in nested pointers to structs", func() {
+			struct1 := NestedStruct{PtrStruct: &SimpleStruct{Field1: 7}}
+			struct2 := NestedStruct{PtrStruct: &SimpleStruct{Field1: 8}}
+			mismatches := structmatcher.StructMatcher(&struct1, &struct2, false, false)
+			Expect(len(mismatches)).To(Equal(1))
+			// TODO: would be better if this was "Mismatch on field Struct1.Field1..."
+			Expect(mismatches[0]).To(Equal("Mismatch on field Field1\nExpected\n    <int>: 8\nto equal\n    <int>: 7"))
 		})
 	})
 
