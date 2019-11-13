@@ -67,6 +67,7 @@ func StructMatcher(expected interface{}, actual interface{}, shouldFilter bool, 
 	return mismatches
 }
 
+// Deprecated: Use structmatcher.MatchStruct() GomegaMatcher
 func ExpectStructsToMatch(expected interface{}, actual interface{}) {
 	mismatches := StructMatcher(expected, actual, false, false)
 	if len(mismatches) > 0 {
@@ -74,6 +75,7 @@ func ExpectStructsToMatch(expected interface{}, actual interface{}) {
 	}
 }
 
+// Deprecated: Use structmatcher.MatchStruct().ExcludingFields() GomegaMatcher
 func ExpectStructsToMatchExcluding(expected interface{}, actual interface{}, excludeFields ...string) {
 	mismatches := StructMatcher(expected, actual, true, false, excludeFields...)
 	if len(mismatches) > 0 {
@@ -81,6 +83,7 @@ func ExpectStructsToMatchExcluding(expected interface{}, actual interface{}, exc
 	}
 }
 
+// Deprecated: Use structmatcher.MatchStruct().IncludingFields() GomegaMatcher
 func ExpectStructsToMatchIncluding(expected interface{}, actual interface{}, includeFields ...string) {
 	mismatches := StructMatcher(expected, actual, true, true, includeFields...)
 	if len(mismatches) > 0 {
