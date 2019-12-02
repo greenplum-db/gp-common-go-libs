@@ -119,7 +119,7 @@ func (m *Matcher) Match(actual interface{}) (success bool, err error) {
 
 func (m *Matcher) FailureMessage(actual interface{}) (message string) {
 	//return format.Message(actual, "to match struct", m.expected)
-	return "Expected structs to match but:\n"+strings.Join(m.mismatches, "\n")
+	return "Expected structs to match but:\n" + strings.Join(m.mismatches, "\n")
 }
 
 func (m *Matcher) NegatedFailureMessage(actual interface{}) (message string) {
