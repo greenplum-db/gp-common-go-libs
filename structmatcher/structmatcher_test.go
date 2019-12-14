@@ -14,7 +14,7 @@ func TestStructMatcher(t *testing.T) {
 	RunSpecs(t, "structmatcher tests")
 }
 
-var _ = Describe("structmatcher.StructMatchers", func() {
+var _ = Describe("structmatcher.StructMatcher", func() {
 	type SimpleStruct struct {
 		Field1 int
 		Field2 string
@@ -96,7 +96,7 @@ var _ = Describe("structmatcher.StructMatchers", func() {
 		})
 	})
 
-	var _ = Describe("structmatcher.MatchStruct() GomegaMatcher", func() {
+	Describe("structmatcher.MatchStruct() GomegaMatcher", func() {
 		It("returns no failures for the same structs", func() {
 			struct1 := SimpleStruct{Field1: 0, Field2: "message1"}
 			struct2 := SimpleStruct{Field1: 0, Field2: "message1"}
@@ -163,6 +163,121 @@ var _ = Describe("structmatcher.StructMatchers", func() {
 				Expect(struct2).NotTo(structmatcher.MatchStruct(struct1))
 			})
 			Expect(messages).To(Equal([]string{"Expected structs not to match, but they did"}))
+		})
+	})
+
+	Describe("Opaque structures", func() {
+		// unexported fields can't be accessed with reflect.Value.Interface()
+		// Instead, if a (nested) struct contains any unexported field, we give
+		// up on recursing, and use gomega.Equal() to do the comparison.
+		// TODO: We only call Interface() b/c we use gomega.Equal() to do each
+		//   field comparison. If we use some other way of comparing that
+		//   doesn't require interface{} types, we could avoid this oddity.
+		//   Unfortunately, reflect package doesn't expose deepValueEqual() that
+		//   uses reflect.Value.
+		type OpaqueStruct struct {
+			privateField string
+		}
+		type SemiOpaqueStruct struct {
+			PublicField  SimpleStruct
+			privateField string
+			PublicField2 SimpleStruct
+		}
+		type NestedOpaqueStruct struct {
+			OpaqueField OpaqueStruct
+			NormalField string
+		}
+		It("sees equal opaque fields as equal", func() {
+			struct1 := NestedOpaqueStruct{
+				OpaqueField: OpaqueStruct{
+					privateField: "you can't see me!",
+				},
+				NormalField: "Hello",
+			}
+			struct2 := struct1
+			Expect(struct2).To(structmatcher.MatchStruct(struct1))
+		})
+		It("compares unequal opaque fields with gomega.Equal()", func() {
+			struct1 := NestedOpaqueStruct{
+				OpaqueField: OpaqueStruct{
+					privateField: "you can't see me!",
+				},
+				NormalField: "Hello",
+			}
+			struct2 := NestedOpaqueStruct{
+				OpaqueField: OpaqueStruct{
+					privateField: "you can't see me either!",
+				},
+				NormalField: "Hello",
+			}
+			messages := InterceptGomegaFailures(func() {
+				Expect(struct2).To(structmatcher.MatchStruct(struct1))
+			})
+			Expect(messages).To(HaveLen(1))
+			Expect(messages[0]).To(Equal("Expected structs to match but:\n" +
+				"Mismatch on unexported field within OpaqueField\n" +
+				"Expected\n" +
+				"    <structmatcher_test.OpaqueStruct>: {\n" +
+				"        privateField: \"you can't see me either!\",\n" +
+				"    }\n" +
+				"to equal\n" +
+				"    <structmatcher_test.OpaqueStruct>: {\n" +
+				"        privateField: \"you can't see me!\",\n" +
+				"    }"))
+		})
+		It("still works when the top structs are opaque", func() {
+			struct1 := OpaqueStruct{privateField: "foo"}
+			struct2 := OpaqueStruct{privateField: "bar"}
+			messages := InterceptGomegaFailures(func() {
+				Expect(struct2).To(structmatcher.MatchStruct(struct1))
+			})
+			Expect(messages).To(HaveLen(1))
+			Expect(messages[0]).To(Equal("Expected structs to match but:\n" +
+				"Mismatch on unexported field within top level struct\n" +
+				"Expected\n" +
+				"    <structmatcher_test.OpaqueStruct>: {privateField: \"bar\"}\n" +
+				"to equal\n" +
+				"    <structmatcher_test.OpaqueStruct>: {privateField: \"foo\"}"))
+		})
+		It("works when public fields are also unequal", func() {
+			struct1 := SemiOpaqueStruct{
+				PublicField:  SimpleStruct{Field1: 1, Field2: "2"},
+				privateField: "foo",
+				PublicField2: SimpleStruct{Field1: 2, Field2: "2"},
+			}
+			struct2 := SemiOpaqueStruct{
+				PublicField:  SimpleStruct{Field1: 10, Field2: "2"},
+				privateField: "bar",
+				PublicField2: SimpleStruct{Field1: 20, Field2: "2"},
+			}
+			messages := InterceptGomegaFailures(func() {
+				Expect(struct2).To(structmatcher.MatchStruct(struct1))
+			})
+			Expect(messages).To(HaveLen(1))
+			Expect(messages[0]).To(Equal("Expected structs to match but:\n" +
+				"Mismatch on field PublicField.Field1\n" +
+				"Expected\n" +
+				"    <int>: 10\n" +
+				"to equal\n" +
+				"    <int>: 1\n" +
+				"Mismatch on field PublicField2.Field1\n" +
+				"Expected\n" +
+				"    <int>: 20\n" +
+				"to equal\n" +
+				"    <int>: 2\n" +
+				"Mismatch on unexported field within top level struct\n" +
+				"Expected\n" +
+				"    <structmatcher_test.SemiOpaqueStruct>: {\n" +
+				"        PublicField: {Field1: 10, Field2: \"2\"},\n" +
+				"        privateField: \"bar\",\n" +
+				"        PublicField2: {Field1: 20, Field2: \"2\"},\n" +
+				"    }\n" +
+				"to equal\n" +
+				"    <structmatcher_test.SemiOpaqueStruct>: {\n" +
+				"        PublicField: {Field1: 1, Field2: \"2\"},\n" +
+				"        privateField: \"foo\",\n" +
+				"        PublicField2: {Field1: 2, Field2: \"2\"},\n" +
+				"    }"))
 		})
 	})
 })

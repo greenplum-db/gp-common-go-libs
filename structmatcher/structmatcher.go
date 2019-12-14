@@ -45,6 +45,7 @@ func structMatcher(expected, actual reflect.Value, fieldPath string, shouldFilte
 	actualStruct := reflect.Indirect(actual)
 	mismatches := []string{}
 	mismatches = append(mismatches, InterceptGomegaFailures(func() {
+		structCanInterface := true
 		for i := 0; i < expectedStruct.NumField(); i++ {
 			expectedField := reflect.Indirect(expectedStruct.Field(i))
 			actualField := reflect.Indirect(actualStruct.Field(i))
@@ -69,10 +70,26 @@ func structMatcher(expected, actual reflect.Value, fieldPath string, shouldFilte
 				subFieldPath := fmt.Sprintf("%s%s.", fieldPath, fieldName)
 				mismatches = append(mismatches, structMatcher(expectedStructField, actualStructField, subFieldPath, shouldFilter, filterInclude, nestedFilterFields...)...)
 			} else {
-				expectedValue := expectedStruct.Field(i).Interface()
-				actualValue := actualStruct.Field(i).Interface()
-				Expect(actualValue).To(Equal(expectedValue), "Mismatch on field %s%s", fieldPath, fieldName)
+				if expectedStruct.Field(i).CanInterface() {
+					expectedValue := expectedStruct.Field(i).Interface()
+					actualValue := actualStruct.Field(i).Interface()
+					Expect(actualValue).To(Equal(expectedValue), "Mismatch on field %s%s", fieldPath, fieldName)
+				} else {
+					structCanInterface = false
+				}
 			}
+		}
+		if !structCanInterface {
+			extra := []interface{}{
+				"Mismatch on unexported field within top level struct",
+			}
+			if fieldPath != "" {
+				structName := fieldPath[0 : len(fieldPath)-1] // remove trailing dot.
+				extra = []interface{}{
+					"Mismatch on unexported field within %s", structName,
+				}
+			}
+			Expect(actualStruct.Interface()).To(Equal(expectedStruct.Interface()), extra...)
 		}
 	})...)
 	return mismatches
