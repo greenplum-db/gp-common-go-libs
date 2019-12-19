@@ -14,10 +14,10 @@ GOFLAGS :=
 dependencies :
 		go get github.com/alecthomas/gometalinter
 		gometalinter --install
-		curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-		dep ensure
-		@cd vendor/golang.org/x/tools/cmd/goimports; go install .
-		@cd vendor/github.com/onsi/ginkgo/ginkgo; go install .
+		go get golang.org/x/tools/cmd/goimports
+		go get github.com/onsi/ginkgo/ginkgo
+		go mod vendor
+		go mod tidy
 
 format :
 		goimports -w .
