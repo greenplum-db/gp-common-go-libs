@@ -12,8 +12,7 @@ GOFLAGS :=
 .PHONY : coverage
 
 dependencies :
-		go get github.com/alecthomas/gometalinter
-		gometalinter --install
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.21.0
 		go get golang.org/x/tools/cmd/goimports
 		go get github.com/onsi/ginkgo/ginkgo
 		go mod vendor
@@ -25,7 +24,7 @@ format :
 
 lint :
 		! gofmt -l structmatcher/ | read
-		gometalinter --config=gometalinter.config -s vendor ./...
+		golangci-lint run -v
 
 unit :
 		ginkgo -r -keepGoing -randomizeSuites -randomizeAllSpecs cluster dbconn gplog iohelper structmatcher 2>&1
