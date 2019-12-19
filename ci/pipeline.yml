@@ -9,7 +9,7 @@ resources:
 jobs:
 - name: units
   plan:
-  - aggregate:
+  - in_parallel:
     - get: gp-common-go-libs
       trigger: true
   - task: unit-tests
