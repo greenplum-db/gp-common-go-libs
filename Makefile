@@ -12,10 +12,9 @@ GOFLAGS :=
 .PHONY : coverage
 
 dependencies :
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.21.0
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ${BIN_DIR} v1.21.0
 		go get golang.org/x/tools/cmd/goimports
 		go get github.com/onsi/ginkgo/ginkgo
-		go mod vendor
 		go mod tidy
 
 format :
