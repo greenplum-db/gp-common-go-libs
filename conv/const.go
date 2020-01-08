@@ -22,7 +22,7 @@ var digits2 = [100][]byte{
 // NaNb is byte slice for 'NaN'
 var NaNb = []byte{'N', 'a', 'N'}
 
-// NaN is byte slice for 'NaN'
+// NaN is a string for "NaN"
 const NaN = "NaN"
 
 var float0 = [18][]byte{
