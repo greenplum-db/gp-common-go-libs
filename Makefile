@@ -26,7 +26,7 @@ lint :
 		golangci-lint run -v
 
 unit :
-		ginkgo -r -keepGoing -randomizeSuites -randomizeAllSpecs cluster dbconn gplog iohelper structmatcher 2>&1
+		ginkgo -r -keepGoing -randomizeSuites -randomizeAllSpecs cluster dbconn gplog iohelper structmatcher conv 2>&1
 
 test : lint unit
 
