@@ -1,0 +1,29 @@
+linters:
+  # please, do not use `enable-all`: it's deprecated and will be removed soon.
+  # inverted configuration with `enable-all` and `disable` is not scalable during updates of golangci-lint
+  disable-all: true
+  enable:
+    - golint
+    - vet
+    - varcheck
+    - unparam
+    - errcheck
+
+issues:
+  # List of regexps of issue texts to exclude, empty list by default.
+  # But independently from this option we use default exclude patterns,
+  # it can be disabled by `exclude-use-default: false`. To list all
+  # excluded by default patterns execute `golangci-lint run --help`
+  exclude:
+    - "don't use ALL_CAPS in Go names; use CamelCase"
+    - "should not use dot imports"
+
+  exclude-rules:
+    - path: _test\.go
+      text: "don't use underscores in Go names"
+      linters:
+        - golint
+
+    - path: _test\.go
+      linters:
+        - errcheck

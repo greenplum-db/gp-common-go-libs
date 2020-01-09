@@ -39,8 +39,8 @@ var (
 	/*
 	 * A function which can customize log file name
 	 */
-	logFileNameFunc		LogFileNameFunc
-	exitFunc	   		ExitFunc
+	logFileNameFunc LogFileNameFunc
+	exitFunc        ExitFunc
 )
 
 const (

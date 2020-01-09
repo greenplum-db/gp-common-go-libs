@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
@@ -13,7 +14,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
 )
 
 /*
