@@ -49,6 +49,7 @@ type DBConn struct {
 	DBName   string
 	Host     string
 	Port     int
+	Options  string
 	Tx       []*sqlx.Tx
 	Version  GPDBVersion
 }
@@ -90,11 +91,15 @@ func NewDBConnFromEnvironment(dbname string) *DBConn {
 	if err != nil {
 		port = 5432
 	}
+	options := operating.System.Getenv("PGOPTIONS")
+	if options != "" {
+		options = "&" + options
+	}
 
-	return NewDBConn(dbname, username, host, port)
+	return NewDBConn(dbname, username, host, port, options)
 }
 
-func NewDBConn(dbname, username, host string, port int) *DBConn {
+func NewDBConn(dbname, username, host string, port int, options string) *DBConn {
 	if dbname == "" {
 		gplog.Fatal(errors.New("No database provided"), "")
 	}
@@ -115,6 +120,7 @@ func NewDBConn(dbname, username, host string, port int) *DBConn {
 		DBName:   dbname,
 		Host:     host,
 		Port:     port,
+		Options:  options,
 		Tx:       nil,
 		Version:  GPDBVersion{},
 	}
@@ -195,7 +201,7 @@ func (dbconn *DBConn) Connect(numConns int) error {
 		return errors.Errorf("The database connection must be closed before reusing the connection")
 	}
 	// This string takes in the literal user/database names. They do not need to be escaped or quoted.
-	connStr := fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable", dbconn.User, dbconn.Host, dbconn.Port, dbconn.DBName)
+	connStr := fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable%s", dbconn.User, dbconn.Host, dbconn.Port, dbconn.DBName, dbconn.Options)
 
 	dbconn.ConnPool = make([]*sqlx.DB, numConns)
 	for i := 0; i < numConns; i++ {

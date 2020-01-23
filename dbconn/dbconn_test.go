@@ -58,11 +58,12 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			Expect(connection.DBName).To(Equal("testdb"))
 		})
 		It("gets the DB info", func() {
-			connection = dbconn.NewDBConn("testdb", "testuser", "mars", 1234)
+			connection = dbconn.NewDBConn("testdb", "testuser", "mars", 1234, "test")
 			Expect(connection.DBName).To(Equal("testdb"))
 			Expect(connection.User).To(Equal("testuser"))
 			Expect(connection.Host).To(Equal("mars"))
 			Expect(connection.Port).To(Equal(1234))
+			Expect(connection.Options).To(Equal("test"))
 		})
 		It("fails if no database is given with the dbname flag", func() {
 			defer testhelper.ShouldPanicWithMessage("No database provided")
@@ -70,11 +71,11 @@ var _ = Describe("dbconn/dbconn tests", func() {
 		})
 		It("fails if username is an empty string", func() {
 			defer testhelper.ShouldPanicWithMessage("No username provided")
-			connection = dbconn.NewDBConn("testdb", "", "mars", 1234)
+			connection = dbconn.NewDBConn("testdb", "", "mars", 1234, "")
 		})
 		It("fails if host is an empty string", func() {
 			defer testhelper.ShouldPanicWithMessage("No host provided")
-			connection = dbconn.NewDBConn("testdb", "testuser", "", 1234)
+			connection = dbconn.NewDBConn("testdb", "testuser", "", 1234, "")
 		})
 	})
 	Describe("DBConn.MustConnect", func() {
