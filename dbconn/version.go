@@ -31,7 +31,7 @@ func NewVersion(versionStr string) GPDBVersion {
 }
 
 func InitializeVersion(dbconn *DBConn) (dbversion GPDBVersion, err error) {
-	err = dbconn.Get(&dbversion, "SELECT version() AS versionstring")
+	err = dbconn.Get(&dbversion, "SELECT pg_catalog.version() AS versionstring")
 	if err != nil {
 		return
 	}

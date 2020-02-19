@@ -67,7 +67,7 @@ func CreateMockDBConn() (*dbconn.DBConn, sqlmock.Sqlmock) {
 
 func ExpectVersionQuery(mock sqlmock.Sqlmock, versionStr string) {
 	versionRow := sqlmock.NewRows([]string{"versionstring"}).AddRow(fmt.Sprintf("(Greenplum Database %s)", versionStr))
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT version() AS versionstring")).WillReturnRows(versionRow)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT pg_catalog.version() AS versionstring")).WillReturnRows(versionRow)
 }
 
 func CreateAndConnectMockDB(numConns int) (*dbconn.DBConn, sqlmock.Sqlmock) {
