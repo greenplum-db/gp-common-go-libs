@@ -9,14 +9,14 @@ import (
 
 const usageMessage = "" +
 	`Usage:
-dd -if [input FILE] -of [output FILE] -skip [skip bytes] -count [bytes to copy]
+gpdd -if [input FILE] -of [output FILE] -skip [skip bytes] -count [bytes to copy]
 
 Examples:
 Copy 100 bytes from a.in to b.out, skipping the starting 20 bytes:
-	dd -if a.in -of b.out -skip 20 -count 100
+	gpdd -if a.in -of b.out -skip 20 -count 100
 
 Print the beginning 100 bytes from a.in to stdout:
-	dd -if a.in -count 100
+	gpdd -if a.in -count 100
 `
 
 var (
@@ -78,11 +78,11 @@ func report(err error) {
 }
 
 func main() {
-	ddMain()
+	gpddMain()
 	os.Exit(exitCode)
 }
 
-func ddMain() {
+func gpddMain() {
 	flag.Usage = usage
 	flag.Parse()
 

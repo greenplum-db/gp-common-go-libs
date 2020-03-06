@@ -11,15 +11,15 @@ import (
 	"testing"
 )
 
-func testDD(t *testing.T, exePath string, exeFolder string) {
+func testGpdd(t *testing.T, exePath string, exeFolder string) {
 	outfilePath := filepath.Join(exeFolder, "outfile")
 	cases := map[Options]string{
 		Options{
-			IF:    "dd.go",
+			IF:    "main.go",
 			Count: 7,
 		}: "package",
 		Options{
-			IF:    "dd.go",
+			IF:    "main.go",
 			OF:    outfilePath,
 			Skip:  8,
 			Count: 4,
@@ -42,21 +42,21 @@ func testDD(t *testing.T, exePath string, exeFolder string) {
 	}
 }
 
-func TestDD(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "dd")
+func TestGpdd(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "gpdd")
 	if err != nil {
 		t.Fatal("TmpDir creation failed: ", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	ddPath := filepath.Join(tmpDir, GetCmd("dd"))
+	gpddPath := filepath.Join(tmpDir, GetCmd("gpdd"))
 	goCmd := GetCmd("go")
-	out, err := exec.Command(goCmd, "build", "-o", ddPath, "../dd").CombinedOutput()
+	out, err := exec.Command(goCmd, "build", "-o", gpddPath, "../gpdd").CombinedOutput()
 	if err != nil {
-		t.Fatalf("%s build -o %s ../dd: %s\n%s", goCmd, ddPath, err, string(out))
+		t.Fatalf("%s build -o %s ../gpdd: %s\n%s", goCmd, gpddPath, err, string(out))
 	}
 
-	testDD(t, ddPath, tmpDir)
+	testGpdd(t, gpddPath, tmpDir)
 }
 
 // Get command based on different OS
@@ -67,7 +67,7 @@ func GetCmd(cmd string) string {
 	return cmd
 }
 
-// Options dd command options struct
+// Options gpdd command options struct
 type Options struct {
 	IF    string
 	OF    string
