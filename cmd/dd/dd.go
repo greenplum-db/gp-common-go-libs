@@ -22,12 +22,12 @@ Print the beginning 100 bytes from a.in to stdout:
 var (
 	// main operation modes
 	ifPath = flag.String("if", "", "read from FILE")
-	skip = flag.Int64("skip", 0, "skip N bytes at start of input FILE, default is 0")
-	count = flag.Int64("count", 0, "copy only N bytes, default is 0")
+	skip   = flag.Int64("skip", 0, "skip N bytes at start of input FILE, default is 0")
+	count  = flag.Int64("count", 0, "copy only N bytes, default is 0")
 	ofPath = flag.String("of", "", "write to FILE, default is stdout")
 )
 
-var exitCode   = 0
+var exitCode = 0
 
 func usage() {
 	fmt.Fprintln(os.Stderr, usageMessage)
@@ -78,9 +78,6 @@ func report(err error) {
 }
 
 func main() {
-	// call ddMain in a separate function
-	// so that it can use defer and have them
-	// run before the exit.
 	ddMain()
 	os.Exit(exitCode)
 }
