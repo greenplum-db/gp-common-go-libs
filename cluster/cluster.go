@@ -209,6 +209,7 @@ func NewCluster(segConfigs []SegConfig) *Cluster {
 	cluster.Segments = segConfigs
 	cluster.ByContent = make(map[int][]*SegConfig, 0)
 	cluster.ByHost = make(map[string][]*SegConfig, 0)
+	cluster.Executor = &GPDBExecutor{}
 	for i := range cluster.Segments {
 		segment := &cluster.Segments[i]
 		cluster.ContentIDs = append(cluster.ContentIDs, segment.ContentID)
