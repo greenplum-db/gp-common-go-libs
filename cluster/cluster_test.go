@@ -47,11 +47,13 @@ var _ = BeforeEach(func() {
 })
 
 var _ = Describe("cluster/cluster tests", func() {
-	masterSeg := cluster.SegConfig{DbID: 1, ContentID: -1, Port: 5432, Hostname: "localhost", DataDir: "/data/gpseg-1"}
+	masterSeg := cluster.SegConfig{DbID: 1, ContentID: -1, Port: 5432, Hostname: "localhost", DataDir: "/data/gpseg-1", Role: "p"}
 	localSegOne := cluster.SegConfig{DbID: 2, ContentID: 0, Port: 20000, Hostname: "localhost", DataDir: "/data/gpseg0"}
 	remoteSegOne := cluster.SegConfig{DbID: 3, ContentID: 1, Port: 20001, Hostname: "remotehost1", DataDir: "/data/gpseg1"}
 	localSegTwo := cluster.SegConfig{DbID: 4, ContentID: 2, Port: 20002, Hostname: "localhost", DataDir: "/data/gpseg2"}
 	remoteSegTwo := cluster.SegConfig{DbID: 5, ContentID: 3, Port: 20003, Hostname: "remotehost2", DataDir: "/data/gpseg3"}
+	standbyMaster := cluster.SegConfig{DbID: 6, ContentID: -1, Port: 5432, Hostname: "standbymasterhost", DataDir: "/data/gpseg-1", Role: "m"}
+	standbyMasterOnSegHost := cluster.SegConfig{DbID: 6, ContentID: -1, Port: 5432, Hostname: "remotehost1", DataDir: "/data/gpseg-1", Role: "m"}
 	var (
 		testCluster  *cluster.Cluster
 		testExecutor *testhelper.TestExecutor
@@ -153,9 +155,10 @@ var _ = Describe("cluster/cluster tests", func() {
 		localSegCmd := []string{"bash", "-c", "ls"}
 		remoteSegOneCmd := []string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "ls"}
 		remoteSegTwoCmd := []string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "ls"}
+		standbyMasterCmd := []string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@standbymasterhost", "ls"}
 		DescribeTable("GenerateSSHCommandList with segments", func(scope cluster.Scope, includeMaster bool, numLocalSegments int, numRemoteSegments int) {
 			segments := []cluster.SegConfig{masterSeg}
-			var expectedCommands []cluster.ShellCommand
+			expectedCommands := []cluster.ShellCommand{}
 			if includeMaster {
 				expectedCommands = append(expectedCommands, cluster.NewShellCommand(scope, -1, "", masterSegCmd))
 			}
@@ -192,11 +195,14 @@ var _ = Describe("cluster/cluster tests", func() {
 			Entry("Returns a list of ssh commands for three segments on different hosts, excluding master", cluster.ON_SEGMENTS, false, 1, 2),
 		)
 
-		DescribeTable("GenerateSSHCommandList with hosts", func(scope cluster.Scope, includeMaster bool, numLocalSegments int, numRemoteSegments int) {
-			segments := []cluster.SegConfig{masterSeg}
+		DescribeTable("GenerateSSHCommandList with hosts", func(scope cluster.Scope, includeMaster bool, includeMirrors bool, standby cluster.SegConfig, numLocalSegments int, numRemoteSegments int) {
+			segments := []cluster.SegConfig{masterSeg, standby}
 			expectedCommands := []cluster.ShellCommand{}
 			if includeMaster {
 				expectedCommands = append(expectedCommands, cluster.NewShellCommand(scope, -2, "localhost", masterSegCmd))
+			}
+			if includeMirrors {
+				expectedCommands = append(expectedCommands, cluster.NewShellCommand(scope, -2, "standbymasterhost", standbyMasterCmd))
 			}
 			if numLocalSegments >= 1 {
 				segments = append(segments, localSegOne)
@@ -222,14 +228,17 @@ var _ = Describe("cluster/cluster tests", func() {
 			})
 			Expect(commandList).To(Equal(expectedCommands))
 		},
-			Entry("returns a list of ssh commands for the master host, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, 0, 0),
-			Entry("returns a list of ssh commands for the master host, excluding the master host", cluster.ON_HOSTS, false, 0, 0),
-			Entry("returns a list of ssh commands for one host, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, 0, 1),
-			Entry("returns a list of ssh commands for one host, excluding the master host", cluster.ON_HOSTS, false, 0, 1),
-			Entry("returns a list of ssh commands for one host containing two segments, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, 2, 0),
-			Entry("returns a list of ssh commands for one host containing two segments, excluding the master host", cluster.ON_HOSTS, false, 2, 0),
-			Entry("returns a list of ssh commands for one local host and two remote hosts, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, 0, 2),
-			Entry("returns a list of ssh commands for one local host and two remote hosts, excluding the master host", cluster.ON_HOSTS, false, 0, 2),
+			Entry("returns a list of ssh commands for the master host, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, false, standbyMaster, 0, 0),
+			Entry("returns a list of ssh commands for the master host, excluding the master host", cluster.ON_HOSTS, false, false, standbyMaster, 0, 0),
+			Entry("returns a list of ssh commands for the master host, including the master and standby master hosts", cluster.ON_HOSTS|cluster.INCLUDE_MASTER|cluster.INCLUDE_MIRRORS, true, true, standbyMaster, 0, 0),
+			Entry("returns a list of ssh commands for the master host, excluding the master host and including standby master host", cluster.ON_HOSTS|cluster.EXCLUDE_MASTER|cluster.INCLUDE_MIRRORS, false, true, standbyMaster, 0, 0),
+			Entry("returns a list of ssh commands for the master host, including the master host and not skipping the standby/segment host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER|cluster.EXCLUDE_MIRRORS, true, false, standbyMasterOnSegHost, 0, 2),
+			Entry("returns a list of ssh commands for one host, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, false, standbyMaster, 0, 1),
+			Entry("returns a list of ssh commands for one host, excluding the master host", cluster.ON_HOSTS, false, false, standbyMaster, 0, 1),
+			Entry("returns a list of ssh commands for one host containing two segments, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, false, standbyMaster, 2, 0),
+			Entry("returns a list of ssh commands for one host containing two segments, excluding the master host", cluster.ON_HOSTS, false, false, standbyMaster, 2, 0),
+			Entry("returns a list of ssh commands for one local host and two remote hosts, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, false, standbyMaster, 0, 2),
+			Entry("returns a list of ssh commands for one local host and two remote hosts, excluding the master host", cluster.ON_HOSTS, false, false, standbyMaster, 0, 2),
 		)
 	})
 	Describe("ExecuteLocalCommand", func() {

@@ -243,7 +243,7 @@ func NewCluster(segConfigs []SegConfig) *Cluster {
  * content and hostname regardless of scope or using some sort of helper struct.
  */
 func (cluster *Cluster) GenerateCommandList(scope Scope, generator interface{}) []ShellCommand {
-	var commands []ShellCommand
+	commands := []ShellCommand{}
 	switch generateCommand := generator.(type) {
 	case func(content int) []string:
 		for _, content := range cluster.ContentIDs {
@@ -254,8 +254,13 @@ func (cluster *Cluster) GenerateCommandList(scope Scope, generator interface{}) 
 		}
 	case func(host string) []string:
 		for _, host := range cluster.Hostnames {
-			if host == cluster.GetHostForContent(-1) && scopeExcludesMaster(scope) &&
-				len(cluster.GetContentsForHost(host)) == 1 { // Only exclude the master host if there are no local segments
+			hostHasOneContent := len(cluster.GetContentsForHost(host)) == 1
+			if host == cluster.GetHostForContent(-1, "p") && scopeExcludesMaster(scope) && hostHasOneContent {
+				// Only exclude the master host if there are no local segments
+				continue
+			}
+			if host == cluster.GetHostForContent(-1, "m") && scopeExcludesMirrors(scope) && hostHasOneContent {
+				// Only exclude the standby master host if there are no segments there
 				continue
 			}
 			commands = append(commands, NewShellCommand(scope, -2, host, generateCommand(host)))
@@ -403,25 +408,44 @@ func LogFatalClusterError(errMessage string, scope Scope, numErrors int) {
 
 func getSegmentByRole(segmentList []*SegConfig, role ...string) *SegConfig {
 	if len(role) == 1 && role[0] == "m" {
+		if len(segmentList) < 2 {
+			return nil
+		}
 		return segmentList[1]
 	}
 	return segmentList[0]
 }
 
 func (cluster *Cluster) GetDbidForContent(contentID int, role ...string) int {
-	return getSegmentByRole(cluster.ByContent[contentID], role...).DbID
+	segConfig := getSegmentByRole(cluster.ByContent[contentID], role...)
+	if segConfig == nil {
+		return -1
+	}
+	return segConfig.DbID
 }
 
 func (cluster *Cluster) GetPortForContent(contentID int, role ...string) int {
-	return getSegmentByRole(cluster.ByContent[contentID], role...).Port
+	segConfig := getSegmentByRole(cluster.ByContent[contentID], role...)
+	if segConfig == nil {
+		return -1
+	}
+	return segConfig.Port
 }
 
 func (cluster *Cluster) GetHostForContent(contentID int, role ...string) string {
-	return getSegmentByRole(cluster.ByContent[contentID], role...).Hostname
+	segConfig := getSegmentByRole(cluster.ByContent[contentID], role...)
+	if segConfig == nil {
+		return ""
+	}
+	return segConfig.Hostname
 }
 
 func (cluster *Cluster) GetDirForContent(contentID int, role ...string) string {
-	return getSegmentByRole(cluster.ByContent[contentID], role...).DataDir
+	segConfig := getSegmentByRole(cluster.ByContent[contentID], role...)
+	if segConfig == nil {
+		return ""
+	}
+	return segConfig.DataDir
 }
 
 func (cluster *Cluster) GetDbidsForHost(hostname string) []int {
@@ -507,8 +531,8 @@ ORDER BY content, role DESC;`, whereClause)
 	return results, nil
 }
 
-func MustGetSegmentConfiguration(connection *dbconn.DBConn) []SegConfig {
-	segConfigs, err := GetSegmentConfiguration(connection)
+func MustGetSegmentConfiguration(connection *dbconn.DBConn, getMirrors ...bool) []SegConfig {
+	segConfigs, err := GetSegmentConfiguration(connection, len(getMirrors) == 1 && getMirrors[0])
 	gplog.FatalOnError(err)
 	return segConfigs
 }
