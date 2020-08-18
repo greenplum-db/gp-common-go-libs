@@ -20,7 +20,7 @@ import (
 	 * but it had a bug with the way it handled certain encodings.
 	 * pgx seems to handle these encodings properly.
 	 */
-	_ "github.com/jackc/pgx/stdlib"
+	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )
