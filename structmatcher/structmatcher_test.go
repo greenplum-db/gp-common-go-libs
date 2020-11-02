@@ -155,6 +155,22 @@ var _ = Describe("structmatcher.StructMatcher", func() {
 			})
 			Expect(messages).To(Equal([]string{"Expected structs to match but:\nMismatch on field Field2\nExpected\n    <string>: teststruct2\nto equal\n    <string>: message1"}))
 		})
+		It("returns mismatches in nested structs", func() {
+			struct1 := NestedStruct{Struct: SimpleStruct{Field1: 7}}
+			struct2 := NestedStruct{Struct: SimpleStruct{Field1: 8}}
+			messages := InterceptGomegaFailures(func() {
+				Expect(struct2).To(structmatcher.MatchStruct(struct1))
+			})
+			Expect(messages).To(Equal([]string{"Expected structs to match but:\nMismatch on field Struct.Field1\nExpected\n    <int>: 8\nto equal\n    <int>: 7"}))
+		})
+		It("returns mismatches in nested pointers to structs", func() {
+			struct1 := NestedStruct{PtrStruct: &SimpleStruct{Field1: 7}}
+			struct2 := NestedStruct{PtrStruct: &SimpleStruct{Field1: 8}}
+			messages := InterceptGomegaFailures(func() {
+				Expect(struct2).To(structmatcher.MatchStruct(struct1))
+			})
+			Expect(messages).To(Equal([]string{"Expected structs to match but:\nMismatch on field PtrStruct.Field1\nExpected\n    <int>: 8\nto equal\n    <int>: 7"}))
+		})
 
 		It("gives a negated failure message", func() {
 			struct1 := SimpleStruct{Field1: 0, Field2: "message1"}
