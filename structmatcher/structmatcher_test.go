@@ -171,6 +171,24 @@ var _ = Describe("structmatcher.StructMatcher", func() {
 			})
 			Expect(messages).To(Equal([]string{"Expected structs to match but:\nMismatch on field PtrStruct.Field1\nExpected\n    <int>: 8\nto equal\n    <int>: 7"}))
 		})
+		It("can compare nil pointers", func() {
+			struct1 := NestedStruct{PtrStruct: nil}
+			struct2 := NestedStruct{PtrStruct: &SimpleStruct{Field1: 8}}
+			messages := InterceptGomegaFailures(func() {
+				Expect(struct2).To(structmatcher.MatchStruct(struct1))
+			})
+			Expect(messages).To(HaveLen(1))
+			Expect(messages[0]).To(MatchRegexp(`Expected structs to match but:\nMismatch on field PtrStruct\nExpected\n    <\*structmatcher_test\.SimpleStruct \| 0x[0-9a-f]+>: \{Field1: 8, Field2: ""}\nto equal\n    <\*structmatcher_test\.SimpleStruct \| 0x0>: nil`))
+		})
+		It("can compare nil pointers", func() {
+			struct1 := NestedStruct{PtrStruct: &SimpleStruct{Field1: 7}}
+			struct2 := NestedStruct{PtrStruct: nil}
+			messages := InterceptGomegaFailures(func() {
+				Expect(struct2).To(structmatcher.MatchStruct(struct1))
+			})
+			Expect(messages).To(HaveLen(1))
+			Expect(messages[0]).To(MatchRegexp(`Expected structs to match but:\nMismatch on field PtrStruct\nExpected\n    <\*structmatcher_test\.SimpleStruct \| 0x0>: nil\nto equal\n    <\*structmatcher_test\.SimpleStruct \| 0x[0-9a-f]+>: \{Field1: 7, Field2: ""}`))
+		})
 
 		It("gives a negated failure message", func() {
 			struct1 := SimpleStruct{Field1: 0, Field2: "message1"}

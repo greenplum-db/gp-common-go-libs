@@ -57,6 +57,10 @@ func structMatcher(expected, actual reflect.Value, fieldPath string, shouldFilte
 			actualFieldIsNonemptySlice := actualField.Kind() == reflect.Slice && !actualField.IsNil() && actualField.Len() > 0
 			expectedFieldIsNonemptySlice := expectedField.Kind() == reflect.Slice && !expectedField.IsNil() && expectedField.Len() > 0
 			fieldIsStructSlice := actualFieldIsNonemptySlice && expectedFieldIsNonemptySlice && actualField.Len() == expectedField.Len() && actualField.Index(0).Kind() == reflect.Struct
+
+			expectedFieldIsNilPtr := expectedStruct.Field(i).Kind() == reflect.Ptr && expectedStruct.Field(i).IsNil()
+			actualFieldIsNilPtr := actualStruct.Field(i).Kind() == reflect.Ptr && actualStruct.Field(i).IsNil()
+
 			if fieldIsStructSlice {
 				for j := 0; j < actualField.Len(); j++ {
 					expectedStructField := expectedStruct.Field(i).Index(j)
@@ -64,6 +68,10 @@ func structMatcher(expected, actual reflect.Value, fieldPath string, shouldFilte
 					subFieldPath := fmt.Sprintf("%s%s[%d].", fieldPath, fieldName, j)
 					mismatches = append(mismatches, structMatcher(expectedStructField, actualStructField, subFieldPath, shouldFilter, filterInclude, nestedFilterFields...)...)
 				}
+			} else if actualFieldIsNilPtr != expectedFieldIsNilPtr {
+				expectedValue := expectedStruct.Field(i).Interface()
+				actualValue := actualStruct.Field(i).Interface()
+				Expect(actualValue).To(Equal(expectedValue), "Mismatch on field %s%s", fieldPath, fieldName)
 			} else if actualField.Kind() == reflect.Struct {
 				expectedStructField := expectedStruct.Field(i)
 				actualStructField := actualStruct.Field(i)
