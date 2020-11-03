@@ -72,20 +72,21 @@ func structMatcher(expected, actual reflect.Value, fieldPath string, shouldFilte
 				expectedValue := expectedStruct.Field(i).Interface()
 				actualValue := actualStruct.Field(i).Interface()
 				Expect(actualValue).To(Equal(expectedValue), "Mismatch on field %s%s", fieldPath, fieldName)
-			} else if actualField.Kind() == reflect.Struct {
-				expectedStructField := expectedStruct.Field(i)
-				actualStructField := actualStruct.Field(i)
-				subFieldPath := fmt.Sprintf("%s%s.", fieldPath, fieldName)
-				mismatches = append(mismatches, structMatcher(expectedStructField, actualStructField, subFieldPath, shouldFilter, filterInclude, nestedFilterFields...)...)
-			} else {
-				if expectedStruct.Field(i).CanInterface() {
+			} else if expectedStruct.Field(i).CanInterface() {
+				if actualField.Kind() == reflect.Struct {
+					expectedStructField := expectedStruct.Field(i)
+					actualStructField := actualStruct.Field(i)
+					subFieldPath := fmt.Sprintf("%s%s.", fieldPath, fieldName)
+					mismatches = append(mismatches, structMatcher(expectedStructField, actualStructField, subFieldPath, shouldFilter, filterInclude, nestedFilterFields...)...)
+				} else {
 					expectedValue := expectedStruct.Field(i).Interface()
 					actualValue := actualStruct.Field(i).Interface()
 					Expect(actualValue).To(Equal(expectedValue), "Mismatch on field %s%s", fieldPath, fieldName)
-				} else {
-					structCanInterface = false
 				}
+			} else {
+				structCanInterface = false
 			}
+
 		}
 		if !structCanInterface {
 			extra := []interface{}{
