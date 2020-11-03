@@ -211,10 +211,12 @@ var _ = Describe("structmatcher.StructMatcher", func() {
 		//   uses reflect.Value.
 		type OpaqueStruct struct {
 			privateField string
+			privateStructField SimpleStruct
 		}
 		type SemiOpaqueStruct struct {
 			PublicField  SimpleStruct
 			privateField string
+			privateStructField SimpleStruct
 			PublicField2 SimpleStruct
 		}
 		type NestedOpaqueStruct struct {
@@ -253,10 +255,12 @@ var _ = Describe("structmatcher.StructMatcher", func() {
 				"Expected\n" +
 				"    <structmatcher_test.OpaqueStruct>: {\n" +
 				"        privateField: \"you can't see me either!\",\n" +
+				"        privateStructField: {Field1: 0, Field2: \"\"},\n" +
 				"    }\n" +
 				"to equal\n" +
 				"    <structmatcher_test.OpaqueStruct>: {\n" +
 				"        privateField: \"you can't see me!\",\n" +
+				"        privateStructField: {Field1: 0, Field2: \"\"},\n" +
 				"    }"))
 		})
 		It("still works when the top structs are opaque", func() {
@@ -269,9 +273,15 @@ var _ = Describe("structmatcher.StructMatcher", func() {
 			Expect(messages[0]).To(Equal("Expected structs to match but:\n" +
 				"Mismatch on unexported field within top level struct\n" +
 				"Expected\n" +
-				"    <structmatcher_test.OpaqueStruct>: {privateField: \"bar\"}\n" +
+				"    <structmatcher_test.OpaqueStruct>: {\n" +
+				"        privateField: \"bar\",\n" +
+				"        privateStructField: {Field1: 0, Field2: \"\"},\n" +
+				"    }\n" +
 				"to equal\n" +
-				"    <structmatcher_test.OpaqueStruct>: {privateField: \"foo\"}"))
+				"    <structmatcher_test.OpaqueStruct>: {\n" +
+				"        privateField: \"foo\",\n" +
+				"        privateStructField: {Field1: 0, Field2: \"\"},\n" +
+				"    }"))
 		})
 		It("works when public fields are also unequal", func() {
 			struct1 := SemiOpaqueStruct{
@@ -304,12 +314,14 @@ var _ = Describe("structmatcher.StructMatcher", func() {
 				"    <structmatcher_test.SemiOpaqueStruct>: {\n" +
 				"        PublicField: {Field1: 10, Field2: \"2\"},\n" +
 				"        privateField: \"bar\",\n" +
+				"        privateStructField: {Field1: 0, Field2: \"\"},\n" +
 				"        PublicField2: {Field1: 20, Field2: \"2\"},\n" +
 				"    }\n" +
 				"to equal\n" +
 				"    <structmatcher_test.SemiOpaqueStruct>: {\n" +
 				"        PublicField: {Field1: 1, Field2: \"2\"},\n" +
 				"        privateField: \"foo\",\n" +
+				"        privateStructField: {Field1: 0, Field2: \"\"},\n" +
 				"        PublicField2: {Field1: 2, Field2: \"2\"},\n" +
 				"    }"))
 		})
