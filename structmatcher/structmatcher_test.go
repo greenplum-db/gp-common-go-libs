@@ -210,14 +210,14 @@ var _ = Describe("structmatcher.StructMatcher", func() {
 		//   Unfortunately, reflect package doesn't expose deepValueEqual() that
 		//   uses reflect.Value.
 		type OpaqueStruct struct {
-			privateField string
+			privateField       string
 			privateStructField SimpleStruct
 		}
 		type SemiOpaqueStruct struct {
-			PublicField  SimpleStruct
-			privateField string
+			PublicField        SimpleStruct
+			privateField       string
 			privateStructField SimpleStruct
-			PublicField2 SimpleStruct
+			PublicField2       SimpleStruct
 		}
 		type NestedOpaqueStruct struct {
 			OpaqueField OpaqueStruct
