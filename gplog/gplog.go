@@ -97,6 +97,10 @@ type GpLogger struct {
 	logPrefixFunc  LogPrefixFunc
 }
 
+func (gplogger GpLogger) Log(v ...interface{}) {
+	Info("%s", v)
+}
+
 /*
  * Logger initialization/helper functions
  */
