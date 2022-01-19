@@ -2,14 +2,15 @@ package conv_test
 
 import (
 	"fmt"
-	. "github.com/greenplum-db/gp-common-go-libs/conv"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"math"
 	"math/rand"
 	"strconv"
 	"testing"
 	"time"
+
+	. "github.com/greenplum-db/gp-common-go-libs/conv"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Integer Conversion functions", func() {

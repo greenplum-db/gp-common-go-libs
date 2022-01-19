@@ -4,10 +4,10 @@ resources:
   type: git
   source:
     uri: https://github.com/greenplum-db/gp-common-go-libs
-    branch: master
+    branch: ((branch))
 
 jobs:
-- name: units
+- name: unit-tests
   plan:
   - in_parallel:
     - get: gp-common-go-libs
@@ -16,9 +16,10 @@ jobs:
     config:
       platform: linux
       image_resource:
-        type: docker-image
+        type: registry-image
         source:
           repository: golang
+          tag: ((golang-version))-buster
       inputs:
       - name: gp-common-go-libs
         path: go/src/github.com/greenplum-db/gp-common-go-libs
@@ -28,10 +29,7 @@ jobs:
         - -c
         - |
           set -ex
-      
           export GOPATH=$PWD/go
           export PATH=$GOPATH/bin:$PATH
-      
           cd $GOPATH/src/github.com/greenplum-db/gp-common-go-libs
-          make depend
-          make test
+          make depend unit

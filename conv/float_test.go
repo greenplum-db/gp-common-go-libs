@@ -1,12 +1,13 @@
 package conv_test
 
 import (
-	. "github.com/greenplum-db/gp-common-go-libs/conv"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"math"
 	"strconv"
 	"testing"
+
+	. "github.com/greenplum-db/gp-common-go-libs/conv"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Float Conversion functions", func() {

@@ -3,12 +3,13 @@ package conv_test
 import (
 	"crypto/md5"
 	"fmt"
-	. "github.com/greenplum-db/gp-common-go-libs/conv"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"math/rand"
 	"testing"
 	"time"
+
+	. "github.com/greenplum-db/gp-common-go-libs/conv"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("MD5 Conversion functions", func() {

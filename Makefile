@@ -4,36 +4,40 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := all
 DIR_PATH=$(shell dirname `pwd`)
 BIN_DIR=$(shell echo $${GOPATH:-~/go} | awk -F':' '{ print $$1 "/bin"}')
-
+BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+GOLANG_VERSION = 1.17.6
+GINKGO=$(GOPATH)/bin/ginkgo
 DEST = .
 
 GOFLAGS :=
 
-.PHONY : coverage
+.PHONY: test lint goimports golangci-lint gofmt unit coverage depend set-dev set-prod
 
-dependencies :
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ${BIN_DIR} v1.21.0
-		go get golang.org/x/tools/cmd/goimports
-		go get github.com/onsi/ginkgo/ginkgo
-		go mod tidy
+test: lint unit
 
-format :
-		goimports -w .
-		gofmt -w -s .
+lint:
+	$(MAKE) goimports gofmt golangci-lint
 
-lint :
-		! gofmt -l structmatcher/ | read
-		golangci-lint run -v
+goimports:
+	docker run --rm -i -v "${PWD}":/data -w /data unibeautify/goimports -w -l /data
 
-unit :
+golangci-lint:
+	docker run --rm -v ${PWD}:/data -w /data golangci/golangci-lint golangci-lint run -v
+
+gofmt:
+	docker run --rm -v ${PWD}:/data cytopia/gofmt --ci .
+
+$(GINKGO):
+	go install github.com/onsi/ginkgo/ginkgo@latest
+
+unit: $(GINKGO)
 		ginkgo -r -keepGoing -randomizeSuites -randomizeAllSpecs cluster dbconn gplog iohelper structmatcher conv 2>&1
-
-test : lint unit
 
 coverage :
 		@./show_coverage.sh
 
-depend : dependencies
+depend:
+	go mod download
 
 clean :
 		# Test artifacts
@@ -43,3 +47,19 @@ clean :
 		# Code coverage files
 		rm -rf /tmp/cover*
 		rm -rf /tmp/unit*
+
+##### Pipeline targets #####
+
+set-dev:
+	fly --target dev set-pipeline --check-creds \
+	--pipeline=dev-gp-common-go-libs-${BRANCH}-${USER} \
+	-c ci/pipeline.yml \
+	--var=branch=${BRANCH} \
+	--var=golang-version=${GOLANG_VERSION}
+
+set-prod:
+	fly --target prod set-pipeline --check-creds \
+	--pipeline=gp-common-go-libs \
+	-c ci/pipeline.yml \
+	--var=branch=master \
+	--var=golang-version=${GOLANG_VERSION}
