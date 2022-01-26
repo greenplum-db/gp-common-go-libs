@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 )
@@ -106,26 +105,17 @@ func structMatcher(expected, actual reflect.Value, fieldPath string, shouldFilte
 
 // Deprecated: Use structmatcher.MatchStruct() GomegaMatcher
 func ExpectStructsToMatch(expected interface{}, actual interface{}) {
-	mismatches := StructMatcher(expected, actual, false, false)
-	if len(mismatches) > 0 {
-		Fail(strings.Join(mismatches, "\n"))
-	}
+	Expect(actual).To(MatchStruct(expected))
 }
 
 // Deprecated: Use structmatcher.MatchStruct().ExcludingFields() GomegaMatcher
 func ExpectStructsToMatchExcluding(expected interface{}, actual interface{}, excludeFields ...string) {
-	mismatches := StructMatcher(expected, actual, true, false, excludeFields...)
-	if len(mismatches) > 0 {
-		Fail(strings.Join(mismatches, "\n"))
-	}
+	Expect(actual).To(MatchStruct(expected).ExcludingFields(excludeFields...))
 }
 
 // Deprecated: Use structmatcher.MatchStruct().IncludingFields() GomegaMatcher
 func ExpectStructsToMatchIncluding(expected interface{}, actual interface{}, includeFields ...string) {
-	mismatches := StructMatcher(expected, actual, true, true, includeFields...)
-	if len(mismatches) > 0 {
-		Fail(strings.Join(mismatches, "\n"))
-	}
+	Expect(actual).To(MatchStruct(expected).IncludingFields(includeFields...))
 }
 
 type Matcher struct {
