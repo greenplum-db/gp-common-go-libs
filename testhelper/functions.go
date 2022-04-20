@@ -11,7 +11,6 @@ import (
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
 	"github.com/jmoiron/sqlx"
-	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 )
@@ -39,9 +38,8 @@ func SetupTestEnvironment() (*dbconn.DBConn, sqlmock.Sqlmock, *gbytes.Buffer, *g
 func CreateMockDB() (*sqlx.DB, sqlmock.Sqlmock) {
 	db, mock, err := sqlmock.New()
 	mockdb := sqlx.NewDb(db, "sqlmock")
-	if err != nil {
-		Fail("Could not create mock database connection")
-	}
+	Expect(err).To(BeNil(), "Could not create mock database connection")
+
 	return mockdb, mock
 }
 
@@ -86,14 +84,11 @@ func NotExpectRegexp(buffer *gbytes.Buffer, testStr string) {
 }
 
 func ShouldPanicWithMessage(message string) {
-	if r := recover(); r != nil {
-		errorMessage := strings.TrimSpace(fmt.Sprintf("%v", r))
-		if !strings.Contains(errorMessage, message) {
-			Fail(fmt.Sprintf("Expected panic message '%s', got '%s'", message, errorMessage))
-		}
-	} else {
-		Fail("Function did not panic as expected")
-	}
+	r := recover()
+	Expect(r).NotTo(BeNil(), "Function did not panic as expected")
+
+	errorMessage := strings.TrimSpace(fmt.Sprintf("%v", r))
+	Expect(errorMessage).Should(ContainSubstring(message))
 }
 
 func AssertQueryRuns(connection *dbconn.DBConn, query string) {
