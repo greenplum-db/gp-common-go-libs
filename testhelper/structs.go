@@ -10,14 +10,21 @@ import (
 )
 
 type TestDriver struct {
-	ErrToReturn error
-	DB          *sqlx.DB
-	DBName      string
-	User        string
+	ErrToReturn  error
+	ErrsToReturn []error
+	DB           *sqlx.DB
+	DBName       string
+	User         string
+	CallNumber   int
 }
 
-func (driver TestDriver) Connect(driverName string, dataSourceName string) (*sqlx.DB, error) {
-	if driver.ErrToReturn != nil {
+func (driver *TestDriver) Connect(driverName string, dataSourceName string) (*sqlx.DB, error) {
+	if driver.ErrsToReturn != nil && driver.CallNumber < len(driver.ErrsToReturn) {
+		// Return the errors in the order specified until we run out of specified errors, then return normally
+		err := driver.ErrsToReturn[driver.CallNumber]
+		driver.CallNumber++
+		return nil, err
+	} else if driver.ErrToReturn != nil {
 		return nil, driver.ErrToReturn
 	}
 	return driver.DB, nil

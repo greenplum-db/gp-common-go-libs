@@ -12,8 +12,8 @@ import (
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
-
 	"github.com/jmoiron/sqlx"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -98,7 +98,7 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			Expect(len(connection.Tx)).To(Equal(3))
 		})
 		It("does not connect if the database exists but the connection is refused", func() {
-			connection.Driver = testhelper.TestDriver{ErrToReturn: fmt.Errorf("pq: connection refused"), DB: mockdb, User: "testrole"}
+			connection.Driver = &testhelper.TestDriver{ErrToReturn: fmt.Errorf("pq: connection refused"), DB: mockdb, User: "testrole"}
 			defer testhelper.ShouldPanicWithMessage(`could not connect to server: Connection refused`)
 			connection.MustConnect(1)
 		})
@@ -107,7 +107,7 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			connection.MustConnect(0)
 		})
 		It("fails if the database does not exist", func() {
-			connection.Driver = testhelper.TestDriver{ErrToReturn: fmt.Errorf("pq: database \"testdb\" does not exist"), DB: mockdb, DBName: "testdb", User: "testrole"}
+			connection.Driver = &testhelper.TestDriver{ErrToReturn: fmt.Errorf("pq: database \"testdb\" does not exist"), DB: mockdb, DBName: "testdb", User: "testrole"}
 			Expect(connection.DBName).To(Equal("testdb"))
 			defer testhelper.ShouldPanicWithMessage("Database \"testdb\" does not exist on testhost:5432, exiting")
 			connection.MustConnect(1)
@@ -118,11 +118,35 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			defer os.Setenv("PGUSER", oldPgUser)
 
 			connection = dbconn.NewDBConnFromEnvironment("testdb")
-			connection.Driver = testhelper.TestDriver{ErrToReturn: fmt.Errorf("pq: role \"nonexistent\" does not exist"), DB: mockdb, DBName: "testdb", User: "nonexistent"}
+			connection.Driver = &testhelper.TestDriver{ErrToReturn: fmt.Errorf("pq: role \"nonexistent\" does not exist"), DB: mockdb, DBName: "testdb", User: "nonexistent"}
 			Expect(connection.User).To(Equal("nonexistent"))
 			expectedStr := fmt.Sprintf("Role \"nonexistent\" does not exist on %s:%d, exiting", connection.Host, connection.Port)
 			defer testhelper.ShouldPanicWithMessage(expectedStr)
 			connection.MustConnect(1)
+		})
+	})
+	Describe("DBConn.Connect", func() {
+		It("can connect to GPDB 6 and earlier in utility mode", func() {
+			connection, mock = testhelper.CreateMockDBConn(nil)
+			testhelper.ExpectVersionQuery(mock, "6.0.0")
+
+			err := connection.Connect(1, true)
+			Expect(err).ToNot(HaveOccurred())
+		})
+		It("can connect to GPDB 7 and later in utility mode", func() {
+			connection, mock = testhelper.CreateMockDBConn(fmt.Errorf(`pq: unrecognized configuration parameter "gp_session_role"`))
+			testhelper.ExpectVersionQuery(mock, "7.0.0")
+
+			err := connection.Connect(1, true)
+			Expect(err).ToNot(HaveOccurred())
+		})
+		It("passes an error message on if a utility mode connection fails", func() {
+			connection, mock = testhelper.CreateMockDBConn(fmt.Errorf(`pq: database \"testdb\" does not exist`))
+			testhelper.ExpectVersionQuery(mock, "6.0.0")
+
+			Expect(connection.DBName).To(Equal("testdb"))
+			err := connection.Connect(1, true)
+			Expect(err.Error()).To(Equal(`Database "testdb" does not exist on testhost:5432, exiting`))
 		})
 	})
 	Describe("DBConn.Close", func() {
