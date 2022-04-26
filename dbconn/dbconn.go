@@ -64,7 +64,7 @@ type DBDriver interface {
 type GPDBDriver struct {
 }
 
-func (driver GPDBDriver) Connect(driverName string, dataSourceName string) (*sqlx.DB, error) {
+func (driver *GPDBDriver) Connect(driverName string, dataSourceName string) (*sqlx.DB, error) {
 	return sqlx.Connect(driverName, dataSourceName)
 }
 
@@ -110,7 +110,7 @@ func NewDBConn(dbname, username, host string, port int) *DBConn {
 	return &DBConn{
 		ConnPool: nil,
 		NumConns: 0,
-		Driver:   GPDBDriver{},
+		Driver:   &GPDBDriver{},
 		User:     username,
 		DBName:   dbname,
 		Host:     host,
@@ -187,7 +187,7 @@ func (dbconn *DBConn) MustConnect(numConns int) {
 	gplog.FatalOnError(err)
 }
 
-func (dbconn *DBConn) Connect(numConns int) error {
+func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 	if numConns < 1 {
 		return errors.Errorf("Must specify a connection pool size that is a positive integer")
 	}
@@ -204,6 +204,30 @@ func (dbconn *DBConn) Connect(numConns int) error {
 	connStr := fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable&statement_cache_capacity=0", dbconn.User, dbconn.Host, dbconn.Port, dbconn.DBName)
 
 	dbconn.ConnPool = make([]*sqlx.DB, numConns)
+	if len(utilityMode) > 1 {
+		return errors.Errorf("The utility mode parameter accepts exactly one boolean value")
+	} else if len(utilityMode) == 1 && utilityMode[0] {
+		// The utility mode GUC differs between GPDB 7 and later (gp_role)
+		// and GPDB 6 and earlier (gp_session_role), and we don't get the
+		// database version until after the connection is established, so
+		// we need to just try one first and see whether it works.
+		roleConnStr := connStr + "&gp_role=utility"
+		sessionRoleConnStr := connStr + "&gp_session_role=utility"
+		utilConn, err := dbconn.Driver.Connect("pgx", sessionRoleConnStr)
+		if utilConn != nil {
+			utilConn.Close()
+		}
+		if err != nil {
+			if strings.Contains(err.Error(), `unrecognized configuration parameter "gp_session_role"`) {
+				connStr = roleConnStr
+			} else {
+				return dbconn.handleConnectionError(err)
+			}
+		} else {
+			connStr = sessionRoleConnStr
+		}
+	}
+
 	for i := 0; i < numConns; i++ {
 		conn, err := dbconn.Driver.Connect("pgx", connStr)
 		err = dbconn.handleConnectionError(err)
@@ -222,6 +246,15 @@ func (dbconn *DBConn) Connect(numConns int) error {
 	}
 	dbconn.Version = version
 	return nil
+}
+
+func (dbconn *DBConn) MustConnectInUtilityMode(numConns int) {
+	err := dbconn.Connect(numConns, true)
+	gplog.FatalOnError(err)
+}
+
+func (dbconn *DBConn) ConnectInUtilityMode(numConns int) error {
+	return dbconn.Connect(numConns, true)
 }
 
 func (dbconn *DBConn) handleConnectionError(err error) error {

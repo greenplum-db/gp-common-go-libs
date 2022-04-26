@@ -53,9 +53,12 @@ func SetDBVersion(connection *dbconn.DBConn, versionStr string) {
 	connection.Version = dbconn.NewVersion(versionStr)
 }
 
-func CreateMockDBConn() (*dbconn.DBConn, sqlmock.Sqlmock) {
+func CreateMockDBConn(errs ...error) (*dbconn.DBConn, sqlmock.Sqlmock) {
 	mockdb, mock := CreateMockDB()
-	driver := TestDriver{DB: mockdb, DBName: "testdb", User: "testrole"}
+	driver := &TestDriver{DB: mockdb, DBName: "testdb", User: "testrole"}
+	if len(errs) > 0 {
+		driver.ErrsToReturn = errs
+	}
 	connection := dbconn.NewDBConnFromEnvironment("testdb")
 	connection.Driver = driver
 	connection.Host = "testhost"
