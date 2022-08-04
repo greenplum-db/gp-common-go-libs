@@ -160,6 +160,7 @@ type ShellCommand struct {
 	Stdout        string
 	Stderr        string
 	Error         error
+	Completed     bool
 }
 
 func NewShellCommand(scope Scope, content int, host string, command []string) ShellCommand {
@@ -329,6 +330,7 @@ func (executor *GPDBExecutor) ExecuteClusterCommand(scope Scope, commandList []S
 			command.Stdout = string(out)
 			command.Stderr = stderr.String()
 			command.Error = err
+			command.Completed = true
 			commandList[index] = command
 			finished <- index
 		}(i)
