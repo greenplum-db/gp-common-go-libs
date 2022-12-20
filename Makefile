@@ -61,5 +61,5 @@ set-prod:
 	fly --target prod set-pipeline --check-creds \
 	--pipeline=gp-common-go-libs \
 	-c ci/pipeline.yml \
-	--var=branch=master \
+	--var=branch=main\
 	--var=golang-version=${GOLANG_VERSION}
