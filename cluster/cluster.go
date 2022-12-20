@@ -62,11 +62,11 @@ type SegConfig struct {
  * ON_SEGMENTS:     Execute one command per segment.
  * ON_HOSTS:        Execute one command per host.
  *
- * INCLUDE_MASTER:  Include the master host or segment in the command list.
- * EXCLUDE_MASTER:  Exclude the master host or segment from the command list.
+ * INCLUDE_COORDINATOR:  Include the coordinator host or segment in the command list.
+ * EXCLUDE_COORDINATOR:  Exclude the coordinator host or segment from the command list.
  *
  * ON_REMOTE:       Execute each command on the specified remote segment/host.
- * ON_LOCAL:        Execute all commands on the master host.
+ * ON_LOCAL:        Execute all commands on the coordinator host.
  *
  * INCLUDE_MIRRORS: Include mirror segments and hosts in the command list.
  * EXCLUDE_MIRRORS: Exclude mirror segments and hosts from the command list.
@@ -75,38 +75,45 @@ type SegConfig struct {
  * obtain a final scope, which has the following bitmask:
  *
  *   /------- INCLUDE_MIRRORS (1) or EXCLUDE_MIRRORS (0)
- *   |/------ INCLUDE_MASTER (1) or EXCLUDE_MASTER (0)
+ *   |/------ INCLUDE_COORDINATOR (1) or EXCLUDE_COORDINATOR (0)
  *   ||/----- ON_LOCAL (1) or ON_REMOTE (0)
  *   |||/---- ON_HOSTS (1) or ON_SEGMENTS (0)
  *   ||||
  *   vvvv
  *   0000
  *
- * For instance, to execute a command on all hosts including the master host,
- * you would pass a function the scope ON_HOSTS | INCLUDE_MASTER.
+ * For instance, to execute a command on all hosts including the coordinator host,
+ * you would pass a function the scope ON_HOSTS | INCLUDE_COORDINATOR.
  *
  * The default scope is 0000, to execute a command on all primary segments,
- * equivalent to ON_SEGMENTS | ON_REMOTE | EXCLUDE_MASTER | EXCLUDE_MIRRORS,
+ * equivalent to ON_SEGMENTS | ON_REMOTE | EXCLUDE_COORDINATOR | EXCLUDE_MIRRORS,
  * though by convention only ON_SEGMENTS need be passed to a function.
  *
  * Technically, the four zero-valued constants are redundant, but are provided
  * so that function callers can specify whatever scope they feel is most clear
- * (e.g. using INCLUDE_MASTER vs. EXCLUDE_MASTER as the basic scopes instead of
+ * (e.g. using INCLUDE_COORDINATOR vs. EXCLUDE_COORDINATOR as the basic scopes instead of
  * ON_SEGMENTS vs. ON_HOSTS if every ExecuteClusterCommand call is per-segment
- * and the utility includes the master in commands a good portion of the time.)
+ * and the utility includes the coordinator in commands a good portion of the time.)
+ *
+ * In version 1.0.10, support for the COORDINATOR scope was added, as GPDB 7 uses
+ * "coordinator" in place of "master".  The MASTER scopes are left in place (and
+ * identical to the COORDINATOR scopes) for backwards compatibility, but may be
+ * deprecated in future.
  */
 
 type Scope uint8
 
 const (
-	ON_SEGMENTS     Scope = 0
-	ON_HOSTS        Scope = 1
-	EXCLUDE_MASTER  Scope = 0
-	INCLUDE_MASTER  Scope = 1 << 1
-	ON_REMOTE       Scope = 0
-	ON_LOCAL        Scope = 1 << 2
-	EXCLUDE_MIRRORS Scope = 0
-	INCLUDE_MIRRORS Scope = 1 << 3
+	ON_SEGMENTS         Scope = 0
+	ON_HOSTS            Scope = 1
+	EXCLUDE_COORDINATOR Scope = 0
+	INCLUDE_COORDINATOR Scope = 1 << 1
+	EXCLUDE_MASTER      Scope = 0
+	INCLUDE_MASTER      Scope = 1 << 1
+	ON_REMOTE           Scope = 0
+	ON_LOCAL            Scope = 1 << 2
+	EXCLUDE_MIRRORS     Scope = 0
+	INCLUDE_MIRRORS     Scope = 1 << 3
 )
 
 func scopeIsSegments(scope Scope) bool {
@@ -117,12 +124,12 @@ func scopeIsHosts(scope Scope) bool {
 	return scope&ON_HOSTS == ON_HOSTS
 }
 
-func scopeExcludesMaster(scope Scope) bool {
-	return scope&INCLUDE_MASTER == EXCLUDE_MASTER
+func scopeExcludesCoordinator(scope Scope) bool {
+	return scope&INCLUDE_COORDINATOR == EXCLUDE_COORDINATOR
 }
 
-func scopeIncludesMaster(scope Scope) bool {
-	return scope&INCLUDE_MASTER == INCLUDE_MASTER
+func scopeIncludesCoordinator(scope Scope) bool {
+	return scope&INCLUDE_COORDINATOR == INCLUDE_COORDINATOR
 }
 
 func scopeIsRemote(scope Scope) bool {
@@ -248,7 +255,7 @@ func (cluster *Cluster) GenerateCommandList(scope Scope, generator interface{}) 
 	switch generateCommand := generator.(type) {
 	case func(content int) []string:
 		for _, content := range cluster.ContentIDs {
-			if content == -1 && scopeExcludesMaster(scope) {
+			if content == -1 && scopeExcludesCoordinator(scope) {
 				continue
 			}
 			commands = append(commands, NewShellCommand(scope, content, "", generateCommand(content)))
@@ -256,12 +263,12 @@ func (cluster *Cluster) GenerateCommandList(scope Scope, generator interface{}) 
 	case func(host string) []string:
 		for _, host := range cluster.Hostnames {
 			hostHasOneContent := len(cluster.GetContentsForHost(host)) == 1
-			if host == cluster.GetHostForContent(-1, "p") && scopeExcludesMaster(scope) && hostHasOneContent {
-				// Only exclude the master host if there are no local segments
+			if host == cluster.GetHostForContent(-1, "p") && scopeExcludesCoordinator(scope) && hostHasOneContent {
+				// Only exclude the coordinator host if there are no local segments
 				continue
 			}
 			if host == cluster.GetHostForContent(-1, "m") && scopeExcludesMirrors(scope) && hostHasOneContent {
-				// Only exclude the standby master host if there are no segments there
+				// Only exclude the standby coordinator host if there are no segments there
 				continue
 			}
 			commands = append(commands, NewShellCommand(scope, -2, host, generateCommand(host)))
@@ -349,8 +356,8 @@ func (executor *GPDBExecutor) ExecuteClusterCommand(scope Scope, commandList []S
  * to simplify execution of...
  * 1. shell commands directly on remote hosts via ssh.
  *    - e.g. running an ls on all hosts
- * 2. shell commands on master to push to remote hosts.
- *    - e.g. running multiple scps on master to push a file to all segments
+ * 2. shell commands on coordinator to push to remote hosts.
+ *    - e.g. running multiple scps on coordinator to push a file to all segments
  */
 func (cluster *Cluster) GenerateAndExecuteCommand(verboseMsg string, scope Scope, generator interface{}) *RemoteOutput {
 	gplog.Verbose(verboseMsg)
@@ -386,7 +393,7 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 func LogFatalClusterError(errMessage string, scope Scope, numErrors int) {
 	str := " on"
 	if scopeIsLocal(scope) {
-		str += " master for"
+		str += " coordinator for" // No good way to toggle "coordinator" vs. "master" here based on version, so default to "coordinator"
 	}
 	errMessage += str
 

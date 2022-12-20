@@ -46,13 +46,13 @@ var _ = BeforeEach(func() {
 })
 
 var _ = Describe("cluster/cluster tests", func() {
-	masterSeg := cluster.SegConfig{DbID: 1, ContentID: -1, Port: 5432, Hostname: "localhost", DataDir: "/data/gpseg-1", Role: "p"}
+	coordinatorSeg := cluster.SegConfig{DbID: 1, ContentID: -1, Port: 5432, Hostname: "localhost", DataDir: "/data/gpseg-1", Role: "p"}
 	localSegOne := cluster.SegConfig{DbID: 2, ContentID: 0, Port: 20000, Hostname: "localhost", DataDir: "/data/gpseg0"}
 	remoteSegOne := cluster.SegConfig{DbID: 3, ContentID: 1, Port: 20001, Hostname: "remotehost1", DataDir: "/data/gpseg1"}
 	localSegTwo := cluster.SegConfig{DbID: 4, ContentID: 2, Port: 20002, Hostname: "localhost", DataDir: "/data/gpseg2"}
 	remoteSegTwo := cluster.SegConfig{DbID: 5, ContentID: 3, Port: 20003, Hostname: "remotehost2", DataDir: "/data/gpseg3"}
-	standbyMaster := cluster.SegConfig{DbID: 6, ContentID: -1, Port: 5432, Hostname: "standbymasterhost", DataDir: "/data/gpseg-1", Role: "m"}
-	standbyMasterOnSegHost := cluster.SegConfig{DbID: 6, ContentID: -1, Port: 5432, Hostname: "remotehost1", DataDir: "/data/gpseg-1", Role: "m"}
+	standbyCoordinator := cluster.SegConfig{DbID: 6, ContentID: -1, Port: 5432, Hostname: "standbycoordinatorhost", DataDir: "/data/gpseg-1", Role: "m"}
+	standbyCoordinatorOnSegHost := cluster.SegConfig{DbID: 6, ContentID: -1, Port: 5432, Hostname: "remotehost1", DataDir: "/data/gpseg-1", Role: "m"}
 	var (
 		testCluster  *cluster.Cluster
 		testExecutor *testhelper.TestExecutor
@@ -62,7 +62,7 @@ var _ = Describe("cluster/cluster tests", func() {
 		operating.System.CurrentUser = func() (*user.User, error) { return &user.User{Username: "testUser", HomeDir: "testDir"}, nil }
 		operating.System.Hostname = func() (string, error) { return "testHost", nil }
 		testExecutor = &testhelper.TestExecutor{}
-		testCluster = cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, remoteSegOne})
+		testCluster = cluster.NewCluster([]cluster.SegConfig{coordinatorSeg, localSegOne, remoteSegOne})
 		testCluster.Executor = testExecutor
 	})
 	Describe("ConstructSSHCommand", func() {
@@ -150,16 +150,16 @@ var _ = Describe("cluster/cluster tests", func() {
 	})
 
 	Describe("GenerateSSHCommandList", func() {
-		masterSegCmd := []string{"bash", "-c", "ls"}
+		coordinatorSegCmd := []string{"bash", "-c", "ls"}
 		localSegCmd := []string{"bash", "-c", "ls"}
 		remoteSegOneCmd := []string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost1", "ls"}
 		remoteSegTwoCmd := []string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@remotehost2", "ls"}
-		standbyMasterCmd := []string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@standbymasterhost", "ls"}
-		DescribeTable("GenerateSSHCommandList with segments", func(scope cluster.Scope, includeMaster bool, numLocalSegments int, numRemoteSegments int) {
-			segments := []cluster.SegConfig{masterSeg}
+		standbyCoordinatorCmd := []string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@standbycoordinatorhost", "ls"}
+		DescribeTable("GenerateSSHCommandList with segments", func(scope cluster.Scope, includeCoordinator bool, numLocalSegments int, numRemoteSegments int) {
+			segments := []cluster.SegConfig{coordinatorSeg}
 			expectedCommands := []cluster.ShellCommand{}
-			if includeMaster {
-				expectedCommands = append(expectedCommands, cluster.NewShellCommand(scope, -1, "", masterSegCmd))
+			if includeCoordinator {
+				expectedCommands = append(expectedCommands, cluster.NewShellCommand(scope, -1, "", coordinatorSegCmd))
 			}
 			if numLocalSegments >= 1 {
 				segments = append(segments, localSegOne)
@@ -184,28 +184,28 @@ var _ = Describe("cluster/cluster tests", func() {
 			})
 			Expect(commandList).To(Equal(expectedCommands))
 		},
-			Entry("Returns a list of ssh commands for the master, including master", cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, true, 0, 0),
-			Entry("Returns a list of ssh commands for the master, excluding master", cluster.ON_SEGMENTS, false, 0, 0),
-			Entry("Returns a list of ssh commands for one segment, including master", cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, true, 0, 1),
-			Entry("Returns a list of ssh commands for one segment, excluding master", cluster.ON_SEGMENTS, false, 0, 1),
-			Entry("Returns a list of ssh commands for two segments on the same host, including master", cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, true, 2, 0),
-			Entry("Returns a list of ssh commands for two segments on the same host, excluding master", cluster.ON_SEGMENTS, false, 2, 0),
-			Entry("Returns a list of ssh commands for three segments on different hosts, including master", cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, true, 1, 2),
-			Entry("Returns a list of ssh commands for three segments on different hosts, excluding master", cluster.ON_SEGMENTS, false, 1, 2),
+			Entry("Returns a list of ssh commands for the coordinator, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, true, 0, 0),
+			Entry("Returns a list of ssh commands for the coordinator, excluding coordinator", cluster.ON_SEGMENTS, false, 0, 0),
+			Entry("Returns a list of ssh commands for one segment, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, true, 0, 1),
+			Entry("Returns a list of ssh commands for one segment, excluding coordinator", cluster.ON_SEGMENTS, false, 0, 1),
+			Entry("Returns a list of ssh commands for two segments on the same host, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, true, 2, 0),
+			Entry("Returns a list of ssh commands for two segments on the same host, excluding coordinator", cluster.ON_SEGMENTS, false, 2, 0),
+			Entry("Returns a list of ssh commands for three segments on different hosts, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, true, 1, 2),
+			Entry("Returns a list of ssh commands for three segments on different hosts, excluding coordinator", cluster.ON_SEGMENTS, false, 1, 2),
 		)
 
-		DescribeTable("GenerateSSHCommandList with hosts", func(scope cluster.Scope, includeMaster bool, includeMirrors bool, standby cluster.SegConfig, numLocalSegments int, numRemoteSegments int) {
-			segments := []cluster.SegConfig{masterSeg, standby}
+		DescribeTable("GenerateSSHCommandList with hosts", func(scope cluster.Scope, includeCoordinator bool, includeMirrors bool, standby cluster.SegConfig, numLocalSegments int, numRemoteSegments int) {
+			segments := []cluster.SegConfig{coordinatorSeg, standby}
 			expectedCommands := []cluster.ShellCommand{}
-			if includeMaster {
-				expectedCommands = append(expectedCommands, cluster.NewShellCommand(scope, -2, "localhost", masterSegCmd))
+			if includeCoordinator {
+				expectedCommands = append(expectedCommands, cluster.NewShellCommand(scope, -2, "localhost", coordinatorSegCmd))
 			}
 			if includeMirrors {
-				expectedCommands = append(expectedCommands, cluster.NewShellCommand(scope, -2, "standbymasterhost", standbyMasterCmd))
+				expectedCommands = append(expectedCommands, cluster.NewShellCommand(scope, -2, "standbycoordinatorhost", standbyCoordinatorCmd))
 			}
 			if numLocalSegments >= 1 {
 				segments = append(segments, localSegOne)
-				if !includeMaster {
+				if !includeCoordinator {
 					expectedCommands = append(expectedCommands, cluster.NewShellCommand(scope, -2, "localhost", localSegCmd))
 				}
 			}
@@ -227,17 +227,17 @@ var _ = Describe("cluster/cluster tests", func() {
 			})
 			Expect(commandList).To(Equal(expectedCommands))
 		},
-			Entry("returns a list of ssh commands for the master host, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, false, standbyMaster, 0, 0),
-			Entry("returns a list of ssh commands for the master host, excluding the master host", cluster.ON_HOSTS, false, false, standbyMaster, 0, 0),
-			Entry("returns a list of ssh commands for the master host, including the master and standby master hosts", cluster.ON_HOSTS|cluster.INCLUDE_MASTER|cluster.INCLUDE_MIRRORS, true, true, standbyMaster, 0, 0),
-			Entry("returns a list of ssh commands for the master host, excluding the master host and including standby master host", cluster.ON_HOSTS|cluster.EXCLUDE_MASTER|cluster.INCLUDE_MIRRORS, false, true, standbyMaster, 0, 0),
-			Entry("returns a list of ssh commands for the master host, including the master host and not skipping the standby/segment host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER|cluster.EXCLUDE_MIRRORS, true, false, standbyMasterOnSegHost, 0, 2),
-			Entry("returns a list of ssh commands for one host, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, false, standbyMaster, 0, 1),
-			Entry("returns a list of ssh commands for one host, excluding the master host", cluster.ON_HOSTS, false, false, standbyMaster, 0, 1),
-			Entry("returns a list of ssh commands for one host containing two segments, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, false, standbyMaster, 2, 0),
-			Entry("returns a list of ssh commands for one host containing two segments, excluding the master host", cluster.ON_HOSTS, false, false, standbyMaster, 2, 0),
-			Entry("returns a list of ssh commands for one local host and two remote hosts, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, false, standbyMaster, 0, 2),
-			Entry("returns a list of ssh commands for one local host and two remote hosts, excluding the master host", cluster.ON_HOSTS, false, false, standbyMaster, 0, 2),
+			Entry("returns a list of ssh commands for the coordinator host, including the coordinator host", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR, true, false, standbyCoordinator, 0, 0),
+			Entry("returns a list of ssh commands for the coordinator host, excluding the coordinator host", cluster.ON_HOSTS, false, false, standbyCoordinator, 0, 0),
+			Entry("returns a list of ssh commands for the coordinator host, including the coordinator and standby coordinator hosts", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR|cluster.INCLUDE_MIRRORS, true, true, standbyCoordinator, 0, 0),
+			Entry("returns a list of ssh commands for the coordinator host, excluding the coordinator host and including standby coordinator host", cluster.ON_HOSTS|cluster.EXCLUDE_COORDINATOR|cluster.INCLUDE_MIRRORS, false, true, standbyCoordinator, 0, 0),
+			Entry("returns a list of ssh commands for the coordinator host, including the coordinator host and not skipping the standby/segment host", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR|cluster.EXCLUDE_MIRRORS, true, false, standbyCoordinatorOnSegHost, 0, 2),
+			Entry("returns a list of ssh commands for one host, including the coordinator host", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR, true, false, standbyCoordinator, 0, 1),
+			Entry("returns a list of ssh commands for one host, excluding the coordinator host", cluster.ON_HOSTS, false, false, standbyCoordinator, 0, 1),
+			Entry("returns a list of ssh commands for one host containing two segments, including the coordinator host", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR, true, false, standbyCoordinator, 2, 0),
+			Entry("returns a list of ssh commands for one host containing two segments, excluding the coordinator host", cluster.ON_HOSTS, false, false, standbyCoordinator, 2, 0),
+			Entry("returns a list of ssh commands for one local host and two remote hosts, including the coordinator host", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR, true, false, standbyCoordinator, 0, 2),
+			Entry("returns a list of ssh commands for one local host and two remote hosts, excluding the coordinator host", cluster.ON_HOSTS, false, false, standbyCoordinator, 0, 2),
 		)
 	})
 	Describe("ExecuteLocalCommand", func() {
@@ -275,15 +275,15 @@ var _ = Describe("cluster/cluster tests", func() {
 		It("runs commands specified by command slice", func() {
 			testCluster := cluster.Cluster{}
 			commandList := []cluster.ShellCommand{
-				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, -1, "", []string{"touch", "/tmp/gp_common_go_libs_test/foo"}),
-				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, 0, "", []string{"touch", "/tmp/gp_common_go_libs_test/baz"}),
+				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, -1, "", []string{"touch", "/tmp/gp_common_go_libs_test/foo"}),
+				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, 0, "", []string{"touch", "/tmp/gp_common_go_libs_test/baz"}),
 			}
 			for _, cmd := range commandList {
 				Expect(cmd.Completed).To(BeFalse())
 			}
 
 			testCluster.Executor = &cluster.GPDBExecutor{}
-			clusterOutput := testCluster.ExecuteClusterCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, commandList)
+			clusterOutput := testCluster.ExecuteClusterCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, commandList)
 
 			expectPathToExist("/tmp/gp_common_go_libs_test/foo")
 			expectPathToExist("/tmp/gp_common_go_libs_test/baz")
@@ -296,11 +296,11 @@ var _ = Describe("cluster/cluster tests", func() {
 		It("returns any errors generated by any of the commands", func() {
 			testCluster := cluster.Cluster{}
 			commandList := []cluster.ShellCommand{
-				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, -1, "", []string{"touch", "/tmp/gp_common_go_libs_test/foo"}),
-				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, 0, "", []string{"some-non-existent-command"}),
+				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, -1, "", []string{"touch", "/tmp/gp_common_go_libs_test/foo"}),
+				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, 0, "", []string{"some-non-existent-command"}),
 			}
 			testCluster.Executor = &cluster.GPDBExecutor{}
-			clusterOutput := testCluster.ExecuteClusterCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, commandList)
+			clusterOutput := testCluster.ExecuteClusterCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, commandList)
 
 			expectPathToExist("/tmp/gp_common_go_libs_test/foo")
 			Expect(clusterOutput.NumErrors).To(Equal(1))
@@ -336,7 +336,7 @@ var _ = Describe("cluster/cluster tests", func() {
 				FailedCommands: []*cluster.ShellCommand{&failedCmd},
 			}
 		})
-		DescribeTable("CheckClusterError", func(scope cluster.Scope, includeMaster bool, perSegment bool, remote bool) {
+		DescribeTable("CheckClusterError", func(scope cluster.Scope, includeCoordinator bool, perSegment bool, remote bool) {
 			remoteOutput.Scope = scope
 			remoteOutput.Commands[0].Scope = scope
 			remoteOutput.FailedCommands[0].Scope = scope
@@ -350,27 +350,27 @@ var _ = Describe("cluster/cluster tests", func() {
 				generatorFunc = func(host string) string { return "Error received" }
 			}
 			if !remote {
-				errStr = "master for " + errStr
+				errStr = "coordinator for " + errStr
 			}
 			defer testhelper.ShouldPanicWithMessage(fmt.Sprintf("Got an error on %s. See gbytes.Buffer for a complete list of errors.", errStr))
 			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the command`))
 			defer Expect(logfile).To(gbytes.Say(fmt.Sprintf(`\[DEBUG\]:-Error received on %s with error command error: exit status 1`, debugStr)))
 			testCluster.CheckClusterError(remoteOutput, "Got an error", generatorFunc)
 		},
-			Entry("prints error messages for a per-segment command, including master", cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, true, true, true),
-			Entry("prints error messages for a per-segment command, excluding master", cluster.ON_SEGMENTS, false, true, true),
-			Entry("prints error messages for a per-host command, including the master host", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, true, false, true),
-			Entry("prints error messages for a per-host command, excluding the master host", cluster.ON_HOSTS, false, false, true),
-			Entry("prints error messages for commands executed on master to segments, including master", cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER|cluster.ON_LOCAL, true, true, false),
-			Entry("prints error messages for commands executed on master to segments, excluding master", cluster.ON_SEGMENTS|cluster.ON_LOCAL, false, true, false),
-			Entry("prints error messages for commands executed on master to hosts, including master", cluster.ON_HOSTS|cluster.INCLUDE_MASTER|cluster.ON_LOCAL, true, false, false),
-			Entry("prints error messages for commands executed on master to hosts, excluding master", cluster.ON_HOSTS|cluster.ON_LOCAL, false, false, false),
+			Entry("prints error messages for a per-segment command, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, true, true, true),
+			Entry("prints error messages for a per-segment command, excluding coordinator", cluster.ON_SEGMENTS, false, true, true),
+			Entry("prints error messages for a per-host command, including the coordinator host", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR, true, false, true),
+			Entry("prints error messages for a per-host command, excluding the coordinator host", cluster.ON_HOSTS, false, false, true),
+			Entry("prints error messages for commands executed on coordinator to segments, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR|cluster.ON_LOCAL, true, true, false),
+			Entry("prints error messages for commands executed on coordinator to segments, excluding coordinator", cluster.ON_SEGMENTS|cluster.ON_LOCAL, false, true, false),
+			Entry("prints error messages for commands executed on coordinator to hosts, including coordinator", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR|cluster.ON_LOCAL, true, false, false),
+			Entry("prints error messages for commands executed on coordinator to hosts, excluding coordinator", cluster.ON_HOSTS|cluster.ON_LOCAL, false, false, false),
 		)
 	})
 	Describe("LogFatalClusterError", func() {
-		It("logs an error for 1 segment (with master)", func() {
+		It("logs an error for 1 segment (with coordinator)", func() {
 			defer testhelper.ShouldPanicWithMessage("Error occurred on 1 segment. See gbytes.Buffer for a complete list of errors.")
-			cluster.LogFatalClusterError("Error occurred", cluster.ON_SEGMENTS|cluster.INCLUDE_MASTER, 1)
+			cluster.LogFatalClusterError("Error occurred", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, 1)
 		})
 		It("logs an error for more than 1 segment", func() {
 			defer testhelper.ShouldPanicWithMessage("Error occurred on 2 segments. See gbytes.Buffer for a complete list of errors.")
@@ -380,14 +380,14 @@ var _ = Describe("cluster/cluster tests", func() {
 			defer testhelper.ShouldPanicWithMessage("Error occurred on 1 host. See gbytes.Buffer for a complete list of errors.")
 			cluster.LogFatalClusterError("Error occurred", cluster.ON_HOSTS, 1)
 		})
-		It("logs an error for more than 1 host (with master)", func() {
+		It("logs an error for more than 1 host (with coordinator)", func() {
 			defer testhelper.ShouldPanicWithMessage("Error occurred on 2 hosts. See gbytes.Buffer for a complete list of errors.")
-			cluster.LogFatalClusterError("Error occurred", cluster.ON_HOSTS|cluster.INCLUDE_MASTER, 2)
+			cluster.LogFatalClusterError("Error occurred", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR, 2)
 		})
 	})
 	Describe("NewCluster", func() {
 		It("sets up the configuration for a single-host, single-segment cluster", func() {
-			newCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne})
+			newCluster := cluster.NewCluster([]cluster.SegConfig{coordinatorSeg, localSegOne})
 			Expect(len(newCluster.ContentIDs)).To(Equal(2))
 			Expect(len(newCluster.Hostnames)).To(Equal(1))
 			Expect(newCluster.Segments[0].DataDir).To(Equal("/data/gpseg-1"))
@@ -396,7 +396,7 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(newCluster.GetHostForContent(0)).To(Equal("localhost"))
 		})
 		It("sets up the configuration for a single-host, multi-segment cluster", func() {
-			newCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, localSegTwo})
+			newCluster := cluster.NewCluster([]cluster.SegConfig{coordinatorSeg, localSegOne, localSegTwo})
 			Expect(len(newCluster.ContentIDs)).To(Equal(3))
 			Expect(len(newCluster.Hostnames)).To(Equal(1))
 			Expect(newCluster.Segments[0].DataDir).To(Equal("/data/gpseg-1"))
@@ -407,7 +407,7 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(newCluster.GetHostForContent(2)).To(Equal("localhost"))
 		})
 		It("sets up the configuration for a multi-host, multi-segment cluster", func() {
-			newCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg, localSegOne, remoteSegTwo})
+			newCluster := cluster.NewCluster([]cluster.SegConfig{coordinatorSeg, localSegOne, remoteSegTwo})
 			Expect(len(newCluster.ContentIDs)).To(Equal(3))
 			Expect(len(newCluster.Hostnames)).To(Equal(2))
 			Expect(newCluster.Segments[0].DataDir).To(Equal("/data/gpseg-1"))
@@ -418,19 +418,19 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(newCluster.GetHostForContent(3)).To(Equal("remotehost2"))
 		})
 		It("ensures that modifying a segment value in Segments is reflected in ByContent and ByHost", func() {
-			newCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg})
+			newCluster := cluster.NewCluster([]cluster.SegConfig{coordinatorSeg})
 			newCluster.Segments[0].DataDir = "/new/dir"
 			Expect(newCluster.GetDirForContent(-1)).To(Equal("/new/dir"))
 			Expect(newCluster.GetDirsForHost("localhost")[0]).To(Equal("/new/dir"))
 		})
 		It("ensures that modifying a segment value in ByContent is reflected in Segments and ByHost", func() {
-			newCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg})
+			newCluster := cluster.NewCluster([]cluster.SegConfig{coordinatorSeg})
 			newCluster.ByContent[-1][0].DataDir = "/new/dir"
 			Expect(newCluster.Segments[0].DataDir).To(Equal("/new/dir"))
 			Expect(newCluster.GetDirsForHost("localhost")[0]).To(Equal("/new/dir"))
 		})
 		It("ensures that modifying a segment value in ByHost is reflected in Segments and ByContent", func() {
-			newCluster := cluster.NewCluster([]cluster.SegConfig{masterSeg})
+			newCluster := cluster.NewCluster([]cluster.SegConfig{coordinatorSeg})
 			newCluster.ByHost["localhost"][0].DataDir = "/new/dir"
 			Expect(newCluster.Segments[0].DataDir).To(Equal("/new/dir"))
 			Expect(newCluster.GetDirForContent(-1)).To(Equal("/new/dir"))
@@ -441,7 +441,7 @@ var _ = Describe("cluster/cluster tests", func() {
 		BeforeEach(func() {
 			primary := cluster.SegConfig{DbID: 2, ContentID: 0, Port: 20000, Hostname: "localhost", DataDir: "/data/primary/gpseg0"}
 			mirror := cluster.SegConfig{DbID: 3, ContentID: 0, Port: 21000, Hostname: "otherhost", DataDir: "/data/mirror/gpseg0"}
-			mirrorCluster = cluster.NewCluster([]cluster.SegConfig{masterSeg, primary, mirror})
+			mirrorCluster = cluster.NewCluster([]cluster.SegConfig{coordinatorSeg, primary, mirror})
 		})
 		It("returns primary information for a segment by default", func() {
 			Expect(mirrorCluster.GetDbidForContent(0)).To(Equal(2))
