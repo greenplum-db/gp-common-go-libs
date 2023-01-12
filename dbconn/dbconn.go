@@ -8,6 +8,7 @@ package dbconn
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -193,11 +194,30 @@ func (dbconn *DBConn) Connect(numConns int) error {
 	if krbsrvname == "" {
 		krbsrvname = "postgres"
 	}
-	connStr := fmt.Sprintf(`user='%s' dbname='%s' krbsrvname='%s' host=%s port=%d`, user, dbname, krbsrvname, dbconn.Host, dbconn.Port)
+
+	sslmode, ssl_ok := os.LookupEnv("PGSSLMODE")
+	ssl_prefer := false
+	// default to prefer if not set
+	// prefer is not supported in this version of sqlx,
+	// so we will try require and then try disable if fail
+	if !ssl_ok || sslmode == "prefer" {
+		sslmode = "require"
+		ssl_prefer = true
+		if !ssl_ok {
+			gplog.Verbose("PGSSLMODE not set, defaulting to prefer")
+		}
+	}
+	connStr := fmt.Sprintf(`user='%s' dbname='%s' krbsrvname='%s' host=%s port=%d sslmode='%s'`, user, dbname, krbsrvname, dbconn.Host, dbconn.Port, sslmode)
 
 	dbconn.ConnPool = make([]*sqlx.DB, numConns)
 	for i := 0; i < numConns; i++ {
 		conn, err := dbconn.Driver.Connect("postgres", connStr)
+		// if sslmode is prefer, try again with sslmode=disable
+		if err != nil && ssl_prefer {
+			gplog.Verbose("Failed to connect with sslmode=require, trying sslmode=disable")
+			connStr = fmt.Sprintf(`user='%s' dbname='%s' krbsrvname='%s' host=%s port=%d sslmode='disable'`, user, dbname, krbsrvname, dbconn.Host, dbconn.Port)
+			conn, err = dbconn.Driver.Connect("postgres", connStr)
+		}
 		err = dbconn.handleConnectionError(err)
 		if err != nil {
 			return err
