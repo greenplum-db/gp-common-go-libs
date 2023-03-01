@@ -5,7 +5,7 @@ SHELL := /bin/bash
 DIR_PATH=$(shell dirname `pwd`)
 BIN_DIR=$(shell echo $${GOPATH:-~/go} | awk -F':' '{ print $$1 "/bin"}')
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
-GOLANG_VERSION = 1.17.6
+GOLANG_VERSION = 1.19.6
 GINKGO=$(GOPATH)/bin/ginkgo
 DEST = .
 
