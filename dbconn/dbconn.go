@@ -257,7 +257,7 @@ func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 			gplog.Verbose("Failed to connect with sslmode=require, trying sslmode=disable")
 			// overwrite sslmode as disable
 			connStr = connStr + " sslmode=disable"
-			conn, err = dbconn.Driver.Connect("postgres", connStr)
+			conn, err = dbconn.Driver.Connect("pgx", connStr)
 		}
 		err = dbconn.handleConnectionError(err)
 		if err != nil {
