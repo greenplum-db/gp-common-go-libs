@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -194,6 +195,26 @@ func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 	if dbconn.ConnPool != nil {
 		return errors.Errorf("The database connection must be closed before reusing the connection")
 	}
+
+	dbname := EscapeConnectionParam(dbconn.DBName)
+	user := EscapeConnectionParam(dbconn.User)
+	krbsrvname := operating.System.Getenv("PGKRBSRVNAME")
+	if krbsrvname == "" {
+		krbsrvname = "postgres"
+	}
+
+	sslmode, ssl_ok := os.LookupEnv("PGSSLMODE")
+	ssl_prefer := false
+	// default to prefer if not set
+	// prefer is not supported in this version of sqlx,
+	// so we will try require and then try disable if fail
+	if !ssl_ok || sslmode == "prefer" {
+		sslmode = "require"
+		ssl_prefer = true
+		if !ssl_ok {
+			gplog.Verbose("PGSSLMODE not set, defaulting to prefer")
+		}
+	}
 	// This string takes in the literal user/database names. They do not need
 	// to be escaped or quoted.
 	// By default pgx/v4 turns on automatic prepared statement caching. This
@@ -201,7 +222,8 @@ func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 	// the same object again, then querying for the object in the same
 	// connection will generate a cache lookup failure. To disable pgx's
 	// automatic prepared statement cache we set statement_cache_capacity to 0.
-	connStr := fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable&statement_cache_capacity=0", dbconn.User, dbconn.Host, dbconn.Port, dbconn.DBName)
+	connStr := fmt.Sprintf(`user='%s' dbname='%s' krbsrvname='%s' host=%s port=%d sslmode='%s' statement_cache_capacity=0`,
+		user, dbname, krbsrvname, dbconn.Host, dbconn.Port, sslmode)
 
 	dbconn.ConnPool = make([]*sqlx.DB, numConns)
 	if len(utilityMode) > 1 {
@@ -211,8 +233,8 @@ func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 		// and GPDB 6 and earlier (gp_session_role), and we don't get the
 		// database version until after the connection is established, so
 		// we need to just try one first and see whether it works.
-		roleConnStr := connStr + "&gp_role=utility"
-		sessionRoleConnStr := connStr + "&gp_session_role=utility"
+		roleConnStr := connStr + " gp_role=utility"
+		sessionRoleConnStr := connStr + " gp_session_role=utility"
 		utilConn, err := dbconn.Driver.Connect("pgx", sessionRoleConnStr)
 		if utilConn != nil {
 			utilConn.Close()
@@ -230,6 +252,13 @@ func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 
 	for i := 0; i < numConns; i++ {
 		conn, err := dbconn.Driver.Connect("pgx", connStr)
+		// if sslmode is prefer, try again with sslmode=disable
+		if err != nil && ssl_prefer {
+			gplog.Verbose("Failed to connect with sslmode=require, trying sslmode=disable")
+			// overwrite sslmode as disable
+			connStr = connStr + " sslmode=disable"
+			conn, err = dbconn.Driver.Connect("postgres", connStr)
+		}
 		err = dbconn.handleConnectionError(err)
 		if err != nil {
 			return err
@@ -370,6 +399,16 @@ func (dbconn *DBConn) ValidateConnNum(whichConn ...int) int {
 		gplog.Fatal(errors.Errorf("Invalid connection number: %d", whichConn[0]), "")
 	}
 	return whichConn[0]
+}
+
+/*
+ * Other useful/helper functions involving DBConn
+ */
+
+func EscapeConnectionParam(param string) string {
+	param = strings.Replace(param, `\`, `\\`, -1)
+	param = strings.Replace(param, `'`, `\'`, -1)
+	return param
 }
 
 /*
