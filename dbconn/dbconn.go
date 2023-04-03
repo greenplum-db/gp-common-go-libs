@@ -9,7 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -202,18 +201,9 @@ func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 	if krbsrvname == "" {
 		krbsrvname = "postgres"
 	}
-
-	sslmode, ssl_ok := os.LookupEnv("PGSSLMODE")
-	ssl_prefer := false
-	// default to prefer if not set
-	// prefer is not supported in this version of sqlx,
-	// so we will try require and then try disable if fail
-	if !ssl_ok || sslmode == "prefer" {
-		sslmode = "require"
-		ssl_prefer = true
-		if !ssl_ok {
-			gplog.Verbose("PGSSLMODE not set, defaulting to prefer")
-		}
+	sslmode := operating.System.Getenv("PGSSLMODE")
+	if sslmode == "" {
+		sslmode = "prefer"
 	}
 	// This string takes in the literal user/database names. They do not need
 	// to be escaped or quoted.
@@ -252,13 +242,6 @@ func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 
 	for i := 0; i < numConns; i++ {
 		conn, err := dbconn.Driver.Connect("pgx", connStr)
-		// if sslmode is prefer, try again with sslmode=disable
-		if err != nil && ssl_prefer {
-			gplog.Verbose("Failed to connect with sslmode=require, trying sslmode=disable")
-			// overwrite sslmode as disable
-			connStr = connStr + " sslmode=disable"
-			conn, err = dbconn.Driver.Connect("pgx", connStr)
-		}
 		err = dbconn.handleConnectionError(err)
 		if err != nil {
 			return err
