@@ -194,6 +194,17 @@ func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 	if dbconn.ConnPool != nil {
 		return errors.Errorf("The database connection must be closed before reusing the connection")
 	}
+
+	dbname := EscapeConnectionParam(dbconn.DBName)
+	user := EscapeConnectionParam(dbconn.User)
+	krbsrvname := operating.System.Getenv("PGKRBSRVNAME")
+	if krbsrvname == "" {
+		krbsrvname = "postgres"
+	}
+	sslmode := operating.System.Getenv("PGSSLMODE")
+	if sslmode == "" {
+		sslmode = "prefer"
+	}
 	// This string takes in the literal user/database names. They do not need
 	// to be escaped or quoted.
 	// By default pgx/v4 turns on automatic prepared statement caching. This
@@ -201,7 +212,8 @@ func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 	// the same object again, then querying for the object in the same
 	// connection will generate a cache lookup failure. To disable pgx's
 	// automatic prepared statement cache we set statement_cache_capacity to 0.
-	connStr := fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable&statement_cache_capacity=0", dbconn.User, dbconn.Host, dbconn.Port, dbconn.DBName)
+	connStr := fmt.Sprintf(`user='%s' dbname='%s' krbsrvname='%s' host=%s port=%d sslmode='%s' statement_cache_capacity=0`,
+		user, dbname, krbsrvname, dbconn.Host, dbconn.Port, sslmode)
 
 	dbconn.ConnPool = make([]*sqlx.DB, numConns)
 	if len(utilityMode) > 1 {
@@ -211,8 +223,8 @@ func (dbconn *DBConn) Connect(numConns int, utilityMode ...bool) error {
 		// and GPDB 6 and earlier (gp_session_role), and we don't get the
 		// database version until after the connection is established, so
 		// we need to just try one first and see whether it works.
-		roleConnStr := connStr + "&gp_role=utility"
-		sessionRoleConnStr := connStr + "&gp_session_role=utility"
+		roleConnStr := connStr + " gp_role=utility"
+		sessionRoleConnStr := connStr + " gp_session_role=utility"
 		utilConn, err := dbconn.Driver.Connect("pgx", sessionRoleConnStr)
 		if utilConn != nil {
 			utilConn.Close()
@@ -370,6 +382,16 @@ func (dbconn *DBConn) ValidateConnNum(whichConn ...int) int {
 		gplog.Fatal(errors.Errorf("Invalid connection number: %d", whichConn[0]), "")
 	}
 	return whichConn[0]
+}
+
+/*
+ * Other useful/helper functions involving DBConn
+ */
+
+func EscapeConnectionParam(param string) string {
+	param = strings.Replace(param, `\`, `\\`, -1)
+	param = strings.Replace(param, `'`, `\'`, -1)
+	return param
 }
 
 /*
