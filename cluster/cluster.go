@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"
@@ -218,9 +219,9 @@ func NewCluster(segConfigs []SegConfig) *Cluster {
 	cluster.ByContent = make(map[int][]*SegConfig, 0)
 	cluster.ByHost = make(map[string][]*SegConfig, 0)
 	cluster.Executor = &GPDBExecutor{}
+
 	for i := range cluster.Segments {
 		segment := &cluster.Segments[i]
-		cluster.ContentIDs = append(cluster.ContentIDs, segment.ContentID)
 		cluster.ByContent[segment.ContentID] = append(cluster.ByContent[segment.ContentID], segment)
 		segmentList := cluster.ByContent[segment.ContentID]
 		if len(segmentList) == 2 && segmentList[0].Role == "m" {
@@ -236,6 +237,10 @@ func NewCluster(segConfigs []SegConfig) *Cluster {
 			cluster.Hostnames = append(cluster.Hostnames, segment.Hostname)
 		}
 	}
+	for content := range cluster.ByContent {
+		cluster.ContentIDs = append(cluster.ContentIDs, content)
+	}
+	sort.Ints(cluster.ContentIDs)
 	return &cluster
 }
 
@@ -493,13 +498,24 @@ func (cluster *Cluster) GetDirsForHost(hostname string) []string {
  * Helper functions
  */
 
+/*
+ * This function accepts up to two booleans:
+ * By default, it retrieves only primary and coordinator information.
+ * If the first boolean is set to true, it also retrieves mirror and standby information.
+ * If the second is set to true, it retrieves only mirror and standby information, regardless of the value of the first boolean.
+ */
 func GetSegmentConfiguration(connection *dbconn.DBConn, getMirrors ...bool) ([]SegConfig, error) {
 	includeMirrors := len(getMirrors) == 1 && getMirrors[0]
+	includeOnlyMirrors := len(getMirrors) == 2 && getMirrors[1]
 	query := ""
 	if connection.Version.Before("6") {
-		whereClause := "WHERE s.role = 'p' AND f.fsname = 'pg_system'"
-		if includeMirrors {
-			whereClause = "WHERE f.fsname = 'pg_system'"
+		whereClause := "WHERE%s f.fsname = 'pg_system'"
+		if includeOnlyMirrors {
+			whereClause = fmt.Sprintf(whereClause, " s.role = 'm' AND")
+		} else if includeMirrors {
+			whereClause = fmt.Sprintf(whereClause, "")
+		} else {
+			whereClause = fmt.Sprintf(whereClause, " s.role = 'p' AND")
 		}
 		query = fmt.Sprintf(`
 SELECT
@@ -516,7 +532,9 @@ JOIN pg_filespace f ON e.fsefsoid = f.oid
 ORDER BY s.content, s.role DESC;`, whereClause)
 	} else {
 		whereClause := "WHERE role = 'p'"
-		if includeMirrors {
+		if includeOnlyMirrors {
+			whereClause = "WHERE role = 'm'"
+		} else if includeMirrors {
 			whereClause = ""
 		}
 		query = fmt.Sprintf(`
