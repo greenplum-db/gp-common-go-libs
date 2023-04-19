@@ -232,12 +232,14 @@ func SetErrorCode(code int) {
 func Info(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	message := GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
-	if logger.fileVerbosity >= LOGINFO {
-		_ = logger.logFile.Output(1, message)
-	}
-	if logger.shellVerbosity >= LOGINFO {
-		_ = logger.logStdout.Output(1, message)
+	if logger.fileVerbosity >= LOGINFO || logger.shellVerbosity >= LOGINFO {
+		message := GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
+		if logger.fileVerbosity >= LOGINFO {
+			_ = logger.logFile.Output(1, message)
+		}
+		if logger.shellVerbosity >= LOGINFO {
+			_ = logger.logStdout.Output(1, message)
+		}
 	}
 }
 
@@ -252,24 +254,28 @@ func Warn(s string, v ...interface{}) {
 func Verbose(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
-	if logger.fileVerbosity >= LOGVERBOSE {
-		_ = logger.logFile.Output(1, message)
-	}
-	if logger.shellVerbosity >= LOGVERBOSE {
-		_ = logger.logStdout.Output(1, message)
+	if logger.fileVerbosity >= LOGVERBOSE || logger.shellVerbosity >= LOGVERBOSE {
+		message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
+		if logger.fileVerbosity >= LOGVERBOSE {
+			_ = logger.logFile.Output(1, message)
+		}
+		if logger.shellVerbosity >= LOGVERBOSE {
+			_ = logger.logStdout.Output(1, message)
+		}
 	}
 }
 
 func Debug(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
-	if logger.fileVerbosity >= LOGDEBUG {
-		_ = logger.logFile.Output(1, message)
-	}
-	if logger.shellVerbosity >= LOGDEBUG {
-		_ = logger.logStdout.Output(1, message)
+	if logger.fileVerbosity >= LOGDEBUG || logger.shellVerbosity >= LOGDEBUG {
+		message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
+		if logger.fileVerbosity >= LOGDEBUG {
+			_ = logger.logFile.Output(1, message)
+		}
+		if logger.shellVerbosity >= LOGDEBUG {
+			_ = logger.logStdout.Output(1, message)
+		}
 	}
 }
 
