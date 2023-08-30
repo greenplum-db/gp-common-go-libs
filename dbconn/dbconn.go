@@ -464,3 +464,58 @@ func SelectStringSlice(connection *DBConn, query string, whichConn ...int) ([]st
 	}
 	return retval, nil
 }
+
+/*
+ * The below are convenience functions for selecting one or more ints that may
+ * be NULL or may not exist, with the same functionality (and the same rationale)
+ * as SelectString and SelectStringSlice; see the comments for those functions,
+ * above, for more details.
+ */
+func MustSelectInt(connection *DBConn, query string, whichConn ...int) int {
+	str, err := SelectInt(connection, query, whichConn...)
+	gplog.FatalOnError(err)
+	return str
+}
+
+func SelectInt(connection *DBConn, query string, whichConn ...int) (int, error) {
+	results, err := SelectIntSlice(connection, query, whichConn...)
+	if err != nil {
+		return 0, err
+	}
+	if len(results) == 1 {
+		return results[0], nil
+	} else if len(results) > 1 {
+		return 0, errors.Errorf("Too many rows returned from query: got %d rows, expected 1 row", len(results))
+	}
+	return 0, nil
+}
+
+func MustSelectIntSlice(connection *DBConn, query string, whichConn ...int) []int {
+	str, err := SelectIntSlice(connection, query, whichConn...)
+	gplog.FatalOnError(err)
+	return str
+}
+
+func SelectIntSlice(connection *DBConn, query string, whichConn ...int) ([]int, error) {
+	connNum := connection.ValidateConnNum(whichConn...)
+	rows, err := connection.Query(query, connNum)
+	if err != nil {
+		return []int{}, err
+	}
+	if cols, _ := rows.Rows.Columns(); len(cols) > 1 {
+		return []int{}, errors.Errorf("Too many columns returned from query: got %d columns, expected 1 column", len(cols))
+	}
+	retval := make([]int, 0)
+	for rows.Rows.Next() {
+		var result sql.NullInt32
+		err = rows.Rows.Scan(&result)
+		if err != nil {
+			return []int{}, err
+		}
+		retval = append(retval, int(result.Int32))
+	}
+	if rows.Rows.Err() != nil {
+		return []int{}, rows.Rows.Err()
+	}
+	return retval, nil
+}
