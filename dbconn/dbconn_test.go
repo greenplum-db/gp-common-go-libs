@@ -480,4 +480,71 @@ var _ = Describe("dbconn/dbconn tests", func() {
 			dbconn.MustSelectString(connection, "SELECT foo FROM bar")
 		})
 	})
+	Describe("MustSelectInt", func() {
+		header := []string{"foo"}
+		rowOne := []driver.Value{"1"}
+		rowTwo := []driver.Value{"2"}
+		headerExtraCol := []string{"foo", "bar"}
+		rowExtraCol := []driver.Value{"1", "2"}
+
+		It("returns a single int if the query selects a single int", func() {
+			fakeResult := sqlmock.NewRows(header).AddRow(rowOne...)
+			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
+			result := dbconn.MustSelectInt(connection, "SELECT foo FROM bar")
+			Expect(result).To(Equal(1))
+		})
+		It("returns 0 if the query selects no ints", func() {
+			fakeResult := sqlmock.NewRows(header)
+			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
+			result := dbconn.MustSelectInt(connection, "SELECT foo FROM bar")
+			Expect(result).To(Equal(0))
+		})
+		It("panics if the query selects multiple rows", func() {
+			fakeResult := sqlmock.NewRows(header).AddRow(rowOne...).AddRow(rowTwo...)
+			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
+			defer testhelper.ShouldPanicWithMessage("Too many rows returned from query: got 2 rows, expected 1 row")
+			dbconn.MustSelectInt(connection, "SELECT foo FROM bar")
+		})
+		It("panics if the query selects multiple columns", func() {
+			fakeResult := sqlmock.NewRows(headerExtraCol).AddRow(rowExtraCol...)
+			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
+			defer testhelper.ShouldPanicWithMessage("Too many columns returned from query: got 2 columns, expected 1 column")
+			dbconn.MustSelectInt(connection, "SELECT foo FROM bar")
+		})
+	})
+	Describe("MustSelectIntSlice", func() {
+		header := []string{"foo"}
+		rowOne := []driver.Value{"1"}
+		rowTwo := []driver.Value{"2"}
+		headerExtraCol := []string{"foo", "bar"}
+		rowExtraCol := []driver.Value{"1", "2"}
+
+		It("returns a slice containing a single int if the query selects a single int", func() {
+			fakeResult := sqlmock.NewRows(header).AddRow(rowOne...)
+			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
+			results := dbconn.MustSelectIntSlice(connection, "SELECT foo FROM bar")
+			Expect(len(results)).To(Equal(1))
+			Expect(results[0]).To(Equal(1))
+		})
+		It("returns an empty slice if the query selects no ints", func() {
+			fakeResult := sqlmock.NewRows(header)
+			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
+			results := dbconn.MustSelectIntSlice(connection, "SELECT foo FROM bar")
+			Expect(len(results)).To(Equal(0))
+		})
+		It("returns a slice containing multiple ints if the query selects multiple rows", func() {
+			fakeResult := sqlmock.NewRows(header).AddRow(rowOne...).AddRow(rowTwo...)
+			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
+			results := dbconn.MustSelectIntSlice(connection, "SELECT foo FROM bar")
+			Expect(len(results)).To(Equal(2))
+			Expect(results[0]).To(Equal(1))
+			Expect(results[1]).To(Equal(2))
+		})
+		It("panics if the query selects multiple columns", func() {
+			fakeResult := sqlmock.NewRows(headerExtraCol).AddRow(rowExtraCol...)
+			mock.ExpectQuery("SELECT (.*)").WillReturnRows(fakeResult)
+			defer testhelper.ShouldPanicWithMessage("Too many columns returned from query: got 2 columns, expected 1 column")
+			dbconn.MustSelectInt(connection, "SELECT foo FROM bar")
+		})
+	})
 })
