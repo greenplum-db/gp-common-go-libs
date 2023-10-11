@@ -18,9 +18,16 @@ _cgo_gotypes.go
 _cgo_export.*
 
 _testmain.go
+coverage.*
+*.coverprofile
 
 *.exe
 *.test
 *.prof
 
 vendor
+
+# editor generated tmp files
+*.swp
+/.idea
+.vscode
