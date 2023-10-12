@@ -25,10 +25,10 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/nxadm/tail v1.4.8
 	github.com/onsi/ginkgo/v2 v2.8.4
-	golang.org/x/crypto v0.6.0
-	golang.org/x/net v0.7.0
-	golang.org/x/sys v0.5.0
-	golang.org/x/text v0.7.0
+	golang.org/x/crypto v0.14.0
+	golang.org/x/net v0.17.0
+	golang.org/x/sys v0.13.0
+	golang.org/x/text v0.13.0
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
 	gopkg.in/yaml.v1 v1.0.0-20140924161607-9f9df34309c0
 )
