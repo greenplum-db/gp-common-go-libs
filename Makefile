@@ -31,7 +31,15 @@ $(GINKGO):
 	go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
 unit: $(GINKGO)
-		ginkgo -r --keep-going --randomize-suites --randomize-all cluster dbconn gplog iohelper structmatcher conv 2>&1
+		ginkgo -r --keep-going --randomize-suites --randomize-all \
+			cluster \
+			conv \
+			dbconn \
+			gperror \
+			gplog \
+			iohelper \
+			structmatcher \
+			2>&1
 
 coverage :
 		@./show_coverage.sh
