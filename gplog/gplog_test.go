@@ -509,6 +509,23 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(logfile, fatalExpected+expectedMessage)
 				})
 			})
+			Context("FatalWithoutPanicLogStacktrace", func() {
+				It("prints to the log file with stack trace, then exit(1)", func() {
+					gplog.SetExitFunc(func() {})
+					expectedMessage := "logfile error something wrong"
+					err := errors.WithStack(errors.New(expectedMessage))
+					expectedWithStack := `.*\[CRITICAL\]:-logfile error something wrong
+.*gplog_test\.glob.*
+.*gplog_test\.go.*
+.*
+.*internal\/suite.go.*
+runtime\.goexit.*`
+					gplog.FatalWithoutPanicLogStacktrace(err, "")
+					testhelper.NotExpectRegexp(stdout, fatalExpected+expectedMessage)
+					testhelper.ExpectRegexp(stderr, fatalExpected+expectedMessage)
+					Expect(string(logfile.Contents())).To(MatchRegexp(expectedWithStack))
+				})
+			})
 		})
 	})
 })
