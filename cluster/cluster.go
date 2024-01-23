@@ -46,12 +46,16 @@ type Cluster struct {
 }
 
 type SegConfig struct {
-	DbID      int
-	ContentID int
-	Role      string
-	Port      int
-	Hostname  string
-	DataDir   string
+	DbID          int
+	ContentID     int
+	Role          string
+	PreferredRole string
+	Mode          string
+	Status        string
+	Port          int
+	Hostname      string
+	Address       string
+	DataDir       string
 }
 
 /*
@@ -522,8 +526,12 @@ SELECT
 	s.dbid,
 	s.content as contentid,
 	s.role,
+	s.preferred_role as preferredrole,
+	s.mode,
+	s.status,
 	s.port,
 	s.hostname,
+	s.address,
 	e.fselocation as datadir
 FROM gp_segment_configuration s
 JOIN pg_filespace_entry e ON s.dbid = e.fsedbid
@@ -542,8 +550,12 @@ SELECT
 	dbid,
 	content as contentid,
 	role,
+	preferred_role as preferredrole,
+	mode,
+	status,
 	port,
 	hostname,
+	address,
 	datadir
 FROM gp_segment_configuration
 %s

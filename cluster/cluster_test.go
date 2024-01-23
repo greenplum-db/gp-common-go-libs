@@ -76,10 +76,14 @@ var _ = Describe("cluster/cluster tests", func() {
 		})
 	})
 	Describe("GetSegmentConfiguration", func() {
-		header := []string{"contentid", "hostname", "datadir"}
-		localSegOne := []driver.Value{"0", "localhost", "/data/gpseg0"}
-		localSegTwo := []driver.Value{"1", "localhost", "/data/gpseg1"}
-		remoteSegOne := []driver.Value{"2", "remotehost", "/data/gpseg2"}
+		header := []string{"dbid", "contentid", "role", "preferredrole", "mode", "status", "port", "hostname", "address", "datadir"}
+		localSegOneValue := cluster.SegConfig{1, 0, "p", "p", "s", "u", 6002, "localhost", "127.0.0.1", "/data/gpseg0"}
+		localSegTwoValue := cluster.SegConfig{2, 1, "m", "m", "s", "u", 6003, "localhost", "127.0.0.1", "/data/gpseg1"}
+		remoteSegOneValue := cluster.SegConfig{3, 2, "p", "m", "s", "u", 6004, "remotehost", "127.0.0.1", "/data/gpseg2"}
+
+		localSegOne := []driver.Value{localSegOneValue.DbID, localSegOneValue.ContentID, localSegOneValue.Role, localSegOneValue.PreferredRole, localSegOneValue.Mode, localSegOneValue.Status, localSegOneValue.Port, localSegOneValue.Hostname, localSegOneValue.Address, localSegOneValue.DataDir}
+		localSegTwo := []driver.Value{localSegTwoValue.DbID, localSegTwoValue.ContentID, localSegTwoValue.Role, localSegTwoValue.PreferredRole, localSegTwoValue.Mode, localSegTwoValue.Status, localSegTwoValue.Port, localSegTwoValue.Hostname, localSegTwoValue.Address, localSegTwoValue.DataDir}
+		remoteSegOne := []driver.Value{remoteSegOneValue.DbID, remoteSegOneValue.ContentID, remoteSegOneValue.Role, remoteSegOneValue.PreferredRole, remoteSegOneValue.Mode, remoteSegOneValue.Status, remoteSegOneValue.Port, remoteSegOneValue.Hostname, remoteSegOneValue.Address, remoteSegOneValue.DataDir}
 
 		It("returns only primaries for a single-host, single-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...)
@@ -87,8 +91,7 @@ var _ = Describe("cluster/cluster tests", func() {
 			results, err := cluster.GetSegmentConfiguration(connection)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
-			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
-			Expect(results[0].Hostname).To(Equal("localhost"))
+			Expect(results[0]).To(Equal(localSegOneValue))
 		})
 		It("returns only primaries for a single-host, multi-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...).AddRow(localSegTwo...)
@@ -96,10 +99,8 @@ var _ = Describe("cluster/cluster tests", func() {
 			results, err := cluster.GetSegmentConfiguration(connection)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(2))
-			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
-			Expect(results[0].Hostname).To(Equal("localhost"))
-			Expect(results[1].DataDir).To(Equal("/data/gpseg1"))
-			Expect(results[1].Hostname).To(Equal("localhost"))
+			Expect(results[0]).To(Equal(localSegOneValue))
+			Expect(results[1]).To(Equal(localSegTwoValue))
 		})
 		It("returns only primaries for a multi-host, multi-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...).AddRow(localSegTwo...).AddRow(remoteSegOne...)
@@ -107,12 +108,9 @@ var _ = Describe("cluster/cluster tests", func() {
 			results, err := cluster.GetSegmentConfiguration(connection)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(3))
-			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
-			Expect(results[0].Hostname).To(Equal("localhost"))
-			Expect(results[1].DataDir).To(Equal("/data/gpseg1"))
-			Expect(results[1].Hostname).To(Equal("localhost"))
-			Expect(results[2].DataDir).To(Equal("/data/gpseg2"))
-			Expect(results[2].Hostname).To(Equal("remotehost"))
+			Expect(results[0]).To(Equal(localSegOneValue))
+			Expect(results[1]).To(Equal(localSegTwoValue))
+			Expect(results[2]).To(Equal(remoteSegOneValue))
 		})
 		It("returns primaries and mirrors for a single-host, single-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...)
@@ -120,8 +118,7 @@ var _ = Describe("cluster/cluster tests", func() {
 			results, err := cluster.GetSegmentConfiguration(connection, true)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
-			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
-			Expect(results[0].Hostname).To(Equal("localhost"))
+			Expect(results[0]).To(Equal(localSegOneValue))
 		})
 		It("returns primaries and mirrors for a single-host, multi-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...).AddRow(localSegTwo...)
@@ -129,10 +126,8 @@ var _ = Describe("cluster/cluster tests", func() {
 			results, err := cluster.GetSegmentConfiguration(connection, true)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(2))
-			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
-			Expect(results[0].Hostname).To(Equal("localhost"))
-			Expect(results[1].DataDir).To(Equal("/data/gpseg1"))
-			Expect(results[1].Hostname).To(Equal("localhost"))
+			Expect(results[0]).To(Equal(localSegOneValue))
+			Expect(results[1]).To(Equal(localSegTwoValue))
 		})
 		It("returns primaries and mirrors for a multi-host, multi-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...).AddRow(localSegTwo...).AddRow(remoteSegOne...)
@@ -140,12 +135,9 @@ var _ = Describe("cluster/cluster tests", func() {
 			results, err := cluster.GetSegmentConfiguration(connection, true)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(3))
-			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
-			Expect(results[0].Hostname).To(Equal("localhost"))
-			Expect(results[1].DataDir).To(Equal("/data/gpseg1"))
-			Expect(results[1].Hostname).To(Equal("localhost"))
-			Expect(results[2].DataDir).To(Equal("/data/gpseg2"))
-			Expect(results[2].Hostname).To(Equal("remotehost"))
+			Expect(results[0]).To(Equal(localSegOneValue))
+			Expect(results[1]).To(Equal(localSegTwoValue))
+			Expect(results[2]).To(Equal(remoteSegOneValue))
 		})
 		It("returns mirrors for a single-host, single-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...)
@@ -153,8 +145,7 @@ var _ = Describe("cluster/cluster tests", func() {
 			results, err := cluster.GetSegmentConfiguration(connection, true, true)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
-			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
-			Expect(results[0].Hostname).To(Equal("localhost"))
+			Expect(results[0]).To(Equal(localSegOneValue))
 		})
 		It("returns mirrors for a single-host, multi-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...).AddRow(localSegTwo...)
@@ -162,10 +153,8 @@ var _ = Describe("cluster/cluster tests", func() {
 			results, err := cluster.GetSegmentConfiguration(connection, true, true)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(2))
-			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
-			Expect(results[0].Hostname).To(Equal("localhost"))
-			Expect(results[1].DataDir).To(Equal("/data/gpseg1"))
-			Expect(results[1].Hostname).To(Equal("localhost"))
+			Expect(results[0]).To(Equal(localSegOneValue))
+			Expect(results[1]).To(Equal(localSegTwoValue))
 		})
 		It("returns mirrors for a multi-host, multi-segment cluster", func() {
 			fakeResult := sqlmock.NewRows(header).AddRow(localSegOne...).AddRow(localSegTwo...).AddRow(remoteSegOne...)
@@ -173,12 +162,9 @@ var _ = Describe("cluster/cluster tests", func() {
 			results, err := cluster.GetSegmentConfiguration(connection, true, true)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(results)).To(Equal(3))
-			Expect(results[0].DataDir).To(Equal("/data/gpseg0"))
-			Expect(results[0].Hostname).To(Equal("localhost"))
-			Expect(results[1].DataDir).To(Equal("/data/gpseg1"))
-			Expect(results[1].Hostname).To(Equal("localhost"))
-			Expect(results[2].DataDir).To(Equal("/data/gpseg2"))
-			Expect(results[2].Hostname).To(Equal("remotehost"))
+			Expect(results[0]).To(Equal(localSegOneValue))
+			Expect(results[1]).To(Equal(localSegTwoValue))
+			Expect(results[2]).To(Equal(remoteSegOneValue))
 		})
 	})
 
