@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -35,6 +36,17 @@ func expectPathToExist(path string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		Fail(fmt.Sprintf("Expected %s to exist", path))
 	}
+}
+
+func createSegConfigFile(content string) *os.File {
+	filename := path.Join(os.TempDir(), "gpsegconfig_dump")
+	confFile, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	Expect(err).To(BeNil())
+	_, err = confFile.WriteString(content)
+	Expect(err).To(BeNil())
+
+	defer confFile.Close()
+	return confFile
 }
 
 var _ = BeforeSuite(func() {
@@ -75,6 +87,180 @@ var _ = Describe("cluster/cluster tests", func() {
 			Expect(cmd).To(Equal([]string{"ssh", "-o", "StrictHostKeyChecking=no", "testUser@some-host", "ls"}))
 		})
 	})
+
+	Describe("GetSegmentConfigurationFromFile", func() {
+		It("should return expected result for a new (10 fields) gpsegconfig_dump file", func() {
+			//create temp file with the sample data from new version
+			expRes := cluster.SegConfig{
+				DbID:          1,
+				ContentID:     -1,
+				Role:          "p",
+				PreferredRole: "p",
+				Mode:          "n",
+				Status:        "u",
+				Port:          7000,
+				Hostname:      "localhost",
+				Address:       "localhost",
+				DataDir:       "/data/qddir/demoDataDir-1",
+			}
+			content := fmt.Sprintf("%d %d %s %s %s %s %d %s %s %s", expRes.DbID, expRes.ContentID, expRes.Role, expRes.PreferredRole, expRes.Mode, expRes.Status, expRes.Port, expRes.Hostname, expRes.Address, expRes.DataDir)
+			tempConfFile := createSegConfigFile(content)
+
+			//call the function under test
+			result, err := cluster.GetSegmentConfigurationFromFile(os.TempDir())
+			Expect(err).To(BeNil())
+			Expect(result).To(HaveLen(1))
+			Expect(result[0]).To(Equal(expRes))
+
+			//Cleanup
+			os.Remove(tempConfFile.Name())
+		})
+
+		It("should return expected result for an old (9 fields) gpsegconfig_dump file", func() {
+			//create temp file with the sample data from new version
+			expRes := cluster.SegConfig{
+				DbID:          1,
+				ContentID:     -1,
+				Role:          "p",
+				PreferredRole: "p",
+				Mode:          "n",
+				Status:        "u",
+				Port:          7000,
+				Hostname:      "localhost",
+				Address:       "localhost",
+			}
+			content := fmt.Sprintf("%d %d %s %s %s %s %d %s %s", expRes.DbID, expRes.ContentID, expRes.Role, expRes.PreferredRole, expRes.Mode, expRes.Status, expRes.Port, expRes.Hostname, expRes.Address)
+			tempConfFile := createSegConfigFile(content)
+
+			//call the function under test
+			result, err := cluster.GetSegmentConfigurationFromFile(os.TempDir())
+			Expect(err).To(BeNil())
+			Expect(result).To(HaveLen(1))
+			Expect(result[0]).To(Equal(expRes))
+
+			//Cleanup
+			os.Remove(tempConfFile.Name())
+		})
+
+		It("should return expected result for multiline gpsegconfig_dump file", func() {
+			//create temp file with the sample data from new version
+			expRes := []cluster.SegConfig{
+				{
+					DbID:          1,
+					ContentID:     -1,
+					Role:          "p",
+					PreferredRole: "p",
+					Mode:          "n",
+					Status:        "u",
+					Port:          7000,
+					Hostname:      "localhost",
+					Address:       "localhost",
+					DataDir:       "/data/qddir/demoDataDir-1",
+				},
+				{
+					DbID:          2,
+					ContentID:     -1,
+					Role:          "m",
+					PreferredRole: "m",
+					Mode:          "n",
+					Status:        "u",
+					Port:          7001,
+					Hostname:      "localhost",
+					Address:       "localhost",
+					DataDir:       "/data/standby/demoDataDir-2",
+				},
+			}
+			var content string
+			for _, segconf := range expRes {
+				text := fmt.Sprintf("%d %d %s %s %s %s %d %s %s %s\n", segconf.DbID, segconf.ContentID, segconf.Role, segconf.PreferredRole, segconf.Mode, segconf.Status, segconf.Port, segconf.Hostname, segconf.Address, segconf.DataDir)
+				content = content + text
+			}
+
+			tempConfFile := createSegConfigFile(content)
+
+			//call the function under test
+			result, err := cluster.GetSegmentConfigurationFromFile(os.TempDir())
+			Expect(err).To(BeNil())
+			Expect(result).To(HaveLen(2))
+			Expect(result).To(Equal(expRes))
+
+			//Cleanup
+			os.Remove(tempConfFile.Name())
+		})
+
+		It("should fail when empty coordinator data directory is provided to function", func() {
+			// Call the function under test
+			result, err := cluster.GetSegmentConfigurationFromFile("")
+
+			// Assertions
+			Expect(err).To(HaveOccurred())
+			Expect(result).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("Coordinator data directory path is empty"))
+		})
+
+		It("should fail when reading invalid file/path", func() {
+			// Call the function under test
+			result, err := cluster.GetSegmentConfigurationFromFile("/tmp/")
+
+			// Assertions
+			Expect(err).To(HaveOccurred())
+			Expect(result).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("Failed to open file /tmp/gpsegconfig_dump. Error: open /tmp/gpsegconfig_dump: no such file or directory"))
+		})
+
+		It("should return an error for a file with less than 9 number of fields", func() {
+			// Create a temporary file with incorrect fields content
+			content := "invalid_content\n"
+			tempConfFile := createSegConfigFile(content)
+
+			// Call the function under test
+			result, err := cluster.GetSegmentConfigurationFromFile(os.TempDir())
+
+			// Assertions
+			Expect(err).To(HaveOccurred())
+			Expect(result).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("Unexpected number of fields (1) in line: invalid_content"))
+
+			// Cleanup
+			os.Remove(tempConfFile.Name())
+		})
+
+		It("should return an error for a file with more than 10 number of fields", func() {
+			// Create a temporary file with incorrect fields content
+			content := "1 -1 p p n u 7000 localhost localhost /data/dir-1 dummy\n"
+			tempConfFile := createSegConfigFile(content)
+
+			// Call the function under test
+			result, err := cluster.GetSegmentConfigurationFromFile(os.TempDir())
+
+			// Assertions
+			Expect(err).To(HaveOccurred())
+			Expect(result).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("Unexpected number of fields (11) in line: 1 -1 p p n u 7000 localhost localhost /data/dir-1 dummy"))
+
+			// Cleanup
+			os.Remove(tempConfFile.Name())
+		})
+
+		It("should fail when there is type conversion error", func() {
+			// Create a temporary file with one invalid int field
+			content := "1a -1 p p n u 7000 localhost localhost /data/dir1\n"
+			tempConfFile := createSegConfigFile(content)
+
+			//Call the function under test
+			result, err := cluster.GetSegmentConfigurationFromFile(os.TempDir())
+
+			// Assertions
+			Expect(err).To(HaveOccurred())
+			Expect(result).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("Failed to convert dbID with value 1a to an int. Error: strconv.Atoi: parsing \"1a\": invalid syntax"))
+
+			//Cleanup
+			os.Remove(tempConfFile.Name())
+		})
+
+	})
+
 	Describe("GetSegmentConfiguration", func() {
 		header := []string{"dbid", "contentid", "role", "preferredrole", "mode", "status", "port", "hostname", "address", "datadir"}
 		localSegOneValue := cluster.SegConfig{1, 0, "p", "p", "s", "u", 6002, "localhost", "127.0.0.1", "/data/gpseg0"}
