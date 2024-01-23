@@ -6,10 +6,14 @@ package cluster
  */
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"
@@ -574,4 +578,126 @@ func MustGetSegmentConfiguration(connection *dbconn.DBConn, getMirrors ...bool) 
 	segConfigs, err := GetSegmentConfiguration(connection, len(getMirrors) == 1 && getMirrors[0])
 	gplog.FatalOnError(err)
 	return segConfigs
+}
+
+/*GetSegmentConfigurationFromFile parse the gpsegconfig_dump file to retrieve segment configuration information.
+Recommended use of the api is to get the contents of gp_segment_configuration when database is down.
+If the database is up, use GetSegmentConfiguration()/MustGetSegmentConfiguration() instead.
+
+gpsegconfig_dump file gets created at $COORDINATOR_DATA_DIR/gpsegconfig_dump by fts process
+The frequency of writing to this file is governed by various fts gucs.
+
+Note: Since the gpsegconfig_dump file is updated by fts process the information returned by
+this function can be a bit stale since user can configure fts to run less frequently
+
+The gpsegconfig_dump file follows a structured format, as illustrated in the example below:
+1 -1 p p n u 6000 localhost localhost /data/temp1
+2 0 p p n u 6002 localhost localhost /data/temp2
+3 1 p p n u 6003 localhost localhost /data/temp3
+4 2 p p n u 6004 localhost localhost /data/temp4
+
+Example Usage:
+   segments, err := GetSegmentConfigurationFromFile("/path/to/coordinator/data/dir")
+   if err != nil {
+       //Handle error
+       return
+   }
+
+*. if gpsegconfig_dump have the following content ( with data-dir).
+   1 -1 p p n u 6000 localhost localhost /data/qddir
+   2 0 p p n u 6002 localhost localhost /data/seg1
+   SegConfig will have DataDir field populated
+
+*. gpsegconfig_dump has following content ( without data-dir)
+	1 -1 p p n u 6000 localhost localhost
+    2 0 p p n u 6002 localhost localhost
+    SegConfig will have DataDir field empty
+
+
+Parameters:
+  -  coordinatorDataDir - The path to the coordinator data directory containing gpsegconfig_dump file.
+     can be retrieved from env var COORDINATOR_DATA_DIRECTORY
+     (e.g. /Users/shrakesh/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1)
+
+Returns:
+  - []SegConfig: A slice of SegConfig structures representing the segment configuration.
+  - error: If any occurs during file reading and parsing.
+*/
+
+func GetSegmentConfigurationFromFile(coordinatorDataDir string) ([]SegConfig, error) {
+
+	/*Check if the given argument coordinator_data_dir is empty*/
+	if len(strings.TrimSpace(coordinatorDataDir)) == 0 {
+		return nil, fmt.Errorf("Coordinator data directory path is empty")
+	}
+
+	/*Generate gpsegconfig_dump file path*/
+	gpsegconfigDump := path.Join(coordinatorDataDir, "gpsegconfig_dump")
+
+	/* Open gpsegconfig_dump */
+	fd, err := os.Open(gpsegconfigDump)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to open file %s. Error: %s", gpsegconfigDump, err.Error())
+	}
+	defer fd.Close()
+
+	results := make([]SegConfig, 0)
+	scanner := bufio.NewScanner(fd)
+
+	/*scanning file line by line to extract the fields into SegConfig struct*/
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		parts := len(fields)
+
+		/* older version of gpsegconfig_dump has 9 parts as it doesn't have datadir
+			1 -1 p p n u 7000 shrakeshSMD6M.vmware.com shrakeshSMD6M.vmware.com
+		newer version of gpsegconfig_dump has 10 parts as it does have datadir
+			1 -1 p p n u 7000 shrakeshSMD6M.vmware.com shrakeshSMD6M.vmware.com /data/qddir/demoDataDir-1 */
+		if parts != 9 && parts != 10 {
+			return nil, fmt.Errorf("Unexpected number of fields (%d) in line: %s", parts, scanner.Text())
+		}
+
+		dbID, err := strconv.Atoi(fields[0])
+		if err != nil {
+			return nil, fmt.Errorf("Failed to convert dbID with value %s to an int. Error: %s", fields[0], err.Error())
+		}
+
+		content, err := strconv.Atoi(fields[1])
+		if err != nil {
+			return nil, fmt.Errorf("Failed to convert content with value %s to an int. Error: %s", fields[1], err.Error())
+		}
+
+		port, err := strconv.Atoi(fields[6])
+		if err != nil {
+			return nil, fmt.Errorf("Failed to convert port with value %s to an int. Error: %s", fields[6], err.Error())
+		}
+
+		// there are 10 fields in new version of gpsegconfig_dump file
+		datadir := ""
+		if parts == 10 {
+			datadir = fields[9]
+		}
+
+		seg := SegConfig{
+			DbID:          dbID,
+			ContentID:     content,
+			Role:          fields[2],
+			PreferredRole: fields[3],
+			Mode:          fields[4],
+			Status:        fields[5],
+			Port:          port,
+			Hostname:      fields[7],
+			Address:       fields[8],
+			DataDir:       datadir,
+		}
+
+		results = append(results, seg)
+	}
+
+	/* validating error during gpsegconfig_dump file read */
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("Failed to read gpsegconfig_dump file %s: %s", gpsegconfigDump, err.Error())
+	}
+
+	return results, nil
 }
