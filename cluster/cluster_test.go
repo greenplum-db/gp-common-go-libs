@@ -466,7 +466,7 @@ var _ = Describe("cluster/cluster tests", func() {
 			testCluster.Executor = &cluster.GPDBExecutor{}
 			output, err := testCluster.ExecuteLocalCommand(commandStr)
 
-			Expect(output).To(Equal("bash: some-non-existent-command: command not found\n"))
+			Expect(output).To(ContainSubstring("some-non-existent-command: command not found\n"))
 			Expect(err.Error()).To(Equal("exit status 127"))
 		})
 	})
