@@ -251,6 +251,25 @@ func Warn(s string, v ...interface{}) {
 	_ = logger.logStdout.Output(1, message)
 }
 
+/*
+ * Progress is for messages that show progress as an alternative to a progress bar.
+ * We write them to the log file if fileVerbosity is >= LOGINFO, and we write them to stdout if shellVerbosity >= LOGVERBOSE
+ */
+
+func Progress(s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
+	var message string
+	if logger.fileVerbosity >= LOGINFO {
+		message = GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
+		_ = logger.logFile.Output(1, message)
+	}
+	if logger.shellVerbosity >= LOGVERBOSE {
+		message = GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
+		_ = logger.logStdout.Output(1, message)
+	}
+}
+
 func Verbose(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()

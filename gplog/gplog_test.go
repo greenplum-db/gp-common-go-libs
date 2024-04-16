@@ -177,6 +177,7 @@ var _ = Describe("logger/log tests", func() {
 		Describe("Shell verbosity set to Error", func() {
 			BeforeEach(func() {
 				gplog.SetVerbosity(gplog.LOGERROR)
+				gplog.SetLogFileVerbosity(gplog.LOGDEBUG)
 			})
 
 			Context("Info", func() {
@@ -195,6 +196,15 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(stdout, warnExpected+expectedMessage)
 					testhelper.NotExpectRegexp(stderr, warnExpected+expectedMessage)
 					testhelper.ExpectRegexp(logfile, warnExpected+expectedMessage)
+				})
+			})
+			Context("Progress", func() {
+				It("prints to the log file", func() {
+					expectedMessage := "error progress"
+					gplog.Progress(expectedMessage)
+					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
+					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
+					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
 				})
 			})
 			Context("Verbose", func() {
@@ -240,6 +250,7 @@ var _ = Describe("logger/log tests", func() {
 		Describe("Shell verbosity set to Info", func() {
 			BeforeEach(func() {
 				gplog.SetVerbosity(gplog.LOGINFO)
+				gplog.SetLogFileVerbosity(gplog.LOGDEBUG)
 			})
 
 			Context("Info", func() {
@@ -258,6 +269,15 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(stdout, warnExpected+expectedMessage)
 					testhelper.NotExpectRegexp(stderr, warnExpected+expectedMessage)
 					testhelper.ExpectRegexp(logfile, warnExpected+expectedMessage)
+				})
+			})
+			Context("Progress", func() {
+				It("prints to the log file", func() {
+					expectedMessage := "info progress"
+					gplog.Progress(expectedMessage)
+					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
+					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
+					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
 				})
 			})
 			Context("Verbose", func() {
@@ -303,6 +323,7 @@ var _ = Describe("logger/log tests", func() {
 		Describe("Shell verbosity set to Verbose", func() {
 			BeforeEach(func() {
 				gplog.SetVerbosity(gplog.LOGVERBOSE)
+				gplog.SetLogFileVerbosity(gplog.LOGDEBUG)
 			})
 
 			Context("Info", func() {
@@ -321,6 +342,15 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(stdout, warnExpected+expectedMessage)
 					testhelper.NotExpectRegexp(stderr, warnExpected+expectedMessage)
 					testhelper.ExpectRegexp(logfile, warnExpected+expectedMessage)
+				})
+			})
+			Context("Progress", func() {
+				It("prints to stdout and the log file", func() {
+					expectedMessage := "verbose progress"
+					gplog.Progress(expectedMessage)
+					testhelper.ExpectRegexp(stdout, verboseExpected+expectedMessage)
+					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
+					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
 				})
 			})
 			Context("Verbose", func() {
@@ -367,6 +397,7 @@ var _ = Describe("logger/log tests", func() {
 		Describe("Shell verbosity set to Debug", func() {
 			BeforeEach(func() {
 				gplog.SetVerbosity(gplog.LOGDEBUG)
+				gplog.SetLogFileVerbosity(gplog.LOGDEBUG)
 			})
 
 			Context("Info", func() {
@@ -385,6 +416,15 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(stdout, warnExpected+expectedMessage)
 					testhelper.NotExpectRegexp(stderr, warnExpected+expectedMessage)
 					testhelper.ExpectRegexp(logfile, warnExpected+expectedMessage)
+				})
+			})
+			Context("Progress", func() {
+				It("prints to stdout and the log file", func() {
+					expectedMessage := "debug progress"
+					gplog.Progress(expectedMessage)
+					testhelper.ExpectRegexp(stdout, verboseExpected+expectedMessage)
+					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
+					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
 				})
 			})
 			Context("Verbose", func() {
@@ -454,6 +494,15 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(logfile, warnExpected+expectedMessage)
 				})
 			})
+			Context("Progress", func() {
+				It("does not print", func() {
+					expectedMessage := "logfile error progress"
+					gplog.Progress(expectedMessage)
+					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
+					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
+					testhelper.NotExpectRegexp(logfile, infoExpected+expectedMessage)
+				})
+			})
 			Context("Verbose", func() {
 				It("does not print", func() {
 					expectedMessage := "logfile error verbose"
@@ -497,6 +546,92 @@ var _ = Describe("logger/log tests", func() {
 				It("prints to the log file, then exit(1)", func() {
 					gplog.SetExitFunc(func() {})
 					expectedMessage := "logfile error fatalwithoutpanic"
+					gplog.FatalWithoutPanic(expectedMessage)
+					testhelper.NotExpectRegexp(stdout, fatalExpected+expectedMessage)
+					testhelper.ExpectRegexp(stderr, fatalExpected+expectedMessage)
+					testhelper.ExpectRegexp(logfile, fatalExpected+expectedMessage)
+				})
+			})
+		})
+		Describe("Shell verbosity set to Info, logfile verbosity set to Info", func() {
+			BeforeEach(func() {
+				gplog.SetVerbosity(gplog.LOGINFO)
+				gplog.SetLogFileVerbosity(gplog.LOGINFO)
+			})
+			AfterEach(func() {
+				gplog.SetLogFileVerbosity(gplog.LOGDEBUG)
+			})
+
+			Context("Info", func() {
+				It("prints to stdout and the log file", func() {
+					expectedMessage := "logfile info info"
+					gplog.Info(expectedMessage)
+					testhelper.ExpectRegexp(stdout, infoExpected+expectedMessage)
+					testhelper.NotExpectRegexp(stderr, infoExpected+expectedMessage)
+					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
+				})
+			})
+			Context("Warn", func() {
+				It("prints to stdout and the log file", func() {
+					expectedMessage := "logfile info warn"
+					gplog.Warn(expectedMessage)
+					testhelper.ExpectRegexp(stdout, warnExpected+expectedMessage)
+					testhelper.NotExpectRegexp(stderr, warnExpected+expectedMessage)
+					testhelper.ExpectRegexp(logfile, warnExpected+expectedMessage)
+				})
+			})
+			Context("Progress", func() {
+				It("prints to the log file", func() {
+					expectedMessage := "logfile info progress"
+					gplog.Progress(expectedMessage)
+					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
+					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
+					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
+				})
+			})
+			Context("Verbose", func() {
+				It("does not print", func() {
+					expectedMessage := "logfile info verbose"
+					gplog.Verbose(expectedMessage)
+					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
+					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
+					testhelper.NotExpectRegexp(logfile, verboseExpected+expectedMessage)
+				})
+			})
+			Context("Debug", func() {
+				It("does not print", func() {
+					expectedMessage := "logfile info debug"
+					gplog.Debug(expectedMessage)
+					testhelper.NotExpectRegexp(stdout, debugExpected+expectedMessage)
+					testhelper.NotExpectRegexp(stderr, debugExpected+expectedMessage)
+					testhelper.NotExpectRegexp(logfile, debugExpected+expectedMessage)
+				})
+			})
+			Context("Error", func() {
+				It("prints to stderr and the log file", func() {
+					expectedMessage := "logfile info error"
+					gplog.Error(expectedMessage)
+					testhelper.NotExpectRegexp(stdout, errorExpected+expectedMessage)
+					testhelper.ExpectRegexp(stderr, errorExpected+expectedMessage)
+					testhelper.ExpectRegexp(logfile, errorExpected+expectedMessage)
+				})
+			})
+			Context("Fatal", func() {
+				It("prints to the log file, then panics", func() {
+					expectedMessage := "logfile info fatal"
+					defer func() {
+						testhelper.NotExpectRegexp(stdout, fatalExpected+expectedMessage)
+						testhelper.NotExpectRegexp(stderr, fatalExpected+expectedMessage)
+						testhelper.ExpectRegexp(logfile, fatalExpected+expectedMessage)
+					}()
+					defer testhelper.ShouldPanicWithMessage(expectedMessage)
+					gplog.Fatal(errors.New(expectedMessage), "")
+				})
+			})
+			Context("FatalWithoutPanic", func() {
+				It("prints to the log file, then exit(1)", func() {
+					gplog.SetExitFunc(func() {})
+					expectedMessage := "logfile info fatalwithoutpanic"
 					gplog.FatalWithoutPanic(expectedMessage)
 					testhelper.NotExpectRegexp(stdout, fatalExpected+expectedMessage)
 					testhelper.ExpectRegexp(stderr, fatalExpected+expectedMessage)
