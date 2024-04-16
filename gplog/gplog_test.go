@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"os/user"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -26,13 +25,13 @@ func TestGpLog(t *testing.T) {
 
 var _ = Describe("logger/log tests", func() {
 	var (
-		stdout       *gbytes.Buffer
-		stderr       *gbytes.Buffer
-		logfile      *gbytes.Buffer
-		buffer       *gbytes.Buffer
-		sampleLogger *gplog.GpLogger
-		fakeInfo     os.FileInfo
+		stdout   *gbytes.Buffer
+		stderr   *gbytes.Buffer
+		logfile  *gbytes.Buffer
+		buffer   *gbytes.Buffer
+		fakeInfo os.FileInfo
 	)
+	const defaultLogFile = "testDir/gpAdminLogs/testProgram_20170101.log"
 
 	BeforeEach(func() {
 		err := os.MkdirAll("/tmp/log_dir", 0755)
@@ -55,22 +54,22 @@ var _ = Describe("logger/log tests", func() {
 	Describe("NewLogger", func() {
 		Context("Setting logfile verbosity", func() {
 			It("defaults to Debug if no argument is passed", func() {
-				gplog.SetLogger(gplog.NewLogger(os.Stdout, os.Stderr, buffer, "testDir/gpAdminLogs/testProgram_20170101.log",
+				gplog.SetLogger(gplog.NewLogger(os.Stdout, os.Stderr, buffer, defaultLogFile,
 					gplog.LOGINFO, "testProgram"))
 				Expect(gplog.GetLogFileVerbosity()).To(Equal(gplog.LOGDEBUG))
 			})
 			It("defaults to Debug if too many arguments are passed", func() {
-				gplog.SetLogger(gplog.NewLogger(os.Stdout, os.Stderr, buffer, "testDir/gpAdminLogs/testProgram_20170101.log",
+				gplog.SetLogger(gplog.NewLogger(os.Stdout, os.Stderr, buffer, defaultLogFile,
 					gplog.LOGINFO, "testProgram", gplog.LOGINFO, gplog.LOGERROR))
 				Expect(gplog.GetLogFileVerbosity()).To(Equal(gplog.LOGDEBUG))
 			})
 			It("defaults to Debug if an invalid argument is passed", func() {
-				gplog.SetLogger(gplog.NewLogger(os.Stdout, os.Stderr, buffer, "testDir/gpAdminLogs/testProgram_20170101.log",
+				gplog.SetLogger(gplog.NewLogger(os.Stdout, os.Stderr, buffer, defaultLogFile,
 					gplog.LOGINFO, "testProgram", 42))
 				Expect(gplog.GetLogFileVerbosity()).To(Equal(gplog.LOGDEBUG))
 			})
 			It("sets the logfile verbosity if a valid argument is passed", func() {
-				gplog.SetLogger(gplog.NewLogger(os.Stdout, os.Stderr, buffer, "testDir/gpAdminLogs/testProgram_20170101.log",
+				gplog.SetLogger(gplog.NewLogger(os.Stdout, os.Stderr, buffer, defaultLogFile,
 					gplog.LOGINFO, "testProgram", gplog.LOGINFO))
 				Expect(gplog.GetLogFileVerbosity()).To(Equal(gplog.LOGINFO))
 			})
@@ -78,28 +77,23 @@ var _ = Describe("logger/log tests", func() {
 	})
 	Describe("InitializeLogging", func() {
 		BeforeEach(func() {
-			sampleLogger = gplog.NewLogger(os.Stdout, os.Stderr, buffer, "testDir/gpAdminLogs/testProgram_20170101.log",
-				gplog.LOGINFO, "testProgram")
 			gplog.SetLogger(nil)
 		})
 		Context("Logger initialized with default log directory and Info log level", func() {
 			It("creates a new logger writing to gpAdminLogs and sets utils.logger to this new logger", func() {
 				gplog.InitializeLogging("testProgram", "")
-				newLogger := gplog.GetLogger()
-				if !reflect.DeepEqual(newLogger, sampleLogger) {
-					Fail(fmt.Sprintf("Created logger does not match sample logger:\n%v\n%v", newLogger, sampleLogger))
-				}
+				Expect(gplog.GetLogFilePath()).To(Equal("testDir/gpAdminLogs/testProgram_20170101.log"))
+				Expect(gplog.GetVerbosity()).To(Equal(gplog.LOGINFO))
+				Expect(gplog.GetLogFileVerbosity()).To(Equal(gplog.LOGDEBUG))
 			})
 		})
 		Context("Logger initialized with a specified log directory and Info log level", func() {
 			It("creates a new logger writing to the specified log directory and sets utils.logger to this new logger", func() {
-				sampleLogger = gplog.NewLogger(os.Stdout, os.Stderr, buffer, "/tmp/log_dir/testProgram_20170101.log",
-					gplog.LOGINFO, "testProgram")
+				expectedFilePath := "/tmp/log_dir/testProgram_20170101.log"
 				gplog.InitializeLogging("testProgram", "/tmp/log_dir")
-				newLogger := gplog.GetLogger()
-				if !reflect.DeepEqual(newLogger, sampleLogger) {
-					Fail(fmt.Sprintf("Created logger does not match sample logger:\n%v\n%v", newLogger, sampleLogger))
-				}
+				Expect(gplog.GetLogFilePath()).To(Equal(expectedFilePath))
+				Expect(gplog.GetVerbosity()).To(Equal(gplog.LOGINFO))
+				Expect(gplog.GetLogFileVerbosity()).To(Equal(gplog.LOGDEBUG))
 			})
 		})
 		Context("Directory or log file does not exist or is not writable", func() {
