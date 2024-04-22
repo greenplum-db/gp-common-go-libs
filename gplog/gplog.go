@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -59,6 +60,16 @@ const (
 	LOGDEBUG
 )
 
+// --- constants for colorized output support
+const escape = "\x1b"
+
+const (
+	NONE = iota
+	RED
+	GREEN
+	YELLOW
+)
+
 /*
  * Leveled logging output functions using the above log levels are implemented
  * below.  Info(), Verbose(), and Debug() print messages when the log level is
@@ -87,15 +98,23 @@ type LogFileNameFunc func(string, string) string
 type ExitFunc func()
 
 type GpLogger struct {
-	logStdout      *log.Logger
-	logStderr      *log.Logger
-	logFile        *log.Logger
-	logFileName    string
-	shellVerbosity int
-	fileVerbosity  int
-	header         string
-	logPrefixFunc  LogPrefixFunc
+	logStdout          *log.Logger
+	logStderr          *log.Logger
+	logFile            *log.Logger
+	logFileName        string
+	shellVerbosity     int
+	fileVerbosity      int
+	header             string
+	shellHeader        string
+	fileHeader         string
+	logPrefixFunc      LogPrefixFunc
+	shellLogPrefixFunc LogPrefixFunc
+	colorize           bool
 }
+
+// levelsToPrefix is a regex for determining if the message level will be shown on console
+// by the DefaultShortLogPrefixFunc function
+var levelsToPrefix = regexp.MustCompile(`WARNING|ERROR|CRITICAL`)
 
 /*
  * Logger initialization/helper functions
@@ -152,14 +171,16 @@ func NewLogger(stdout io.Writer, stderr io.Writer, logFile io.Writer, logFileNam
 		fileVerbosity = logFileVerbosity[0]
 	}
 	return &GpLogger{
-		logStdout:      log.New(stdout, "", 0),
-		logStderr:      log.New(stderr, "", 0),
-		logFile:        log.New(logFile, "", 0),
-		logFileName:    logFileName,
-		shellVerbosity: shellVerbosity,
-		fileVerbosity:  fileVerbosity,
-		header:         GetHeader(program),
-		logPrefixFunc:  nil,
+		logStdout:          log.New(stdout, "", 0),
+		logStderr:          log.New(stderr, "", 0),
+		logFile:            log.New(logFile, "", 0),
+		logFileName:        logFileName,
+		shellVerbosity:     shellVerbosity,
+		fileVerbosity:      fileVerbosity,
+		header:             GetHeader(program),
+		logPrefixFunc:      nil,
+		shellLogPrefixFunc: nil,
+		colorize:           false,
 	}
 }
 
@@ -177,6 +198,22 @@ func SetLogPrefixFunc(logPrefixFunc func(string) string) {
 	logger.logPrefixFunc = logPrefixFunc
 }
 
+// SetShellLogPrefixFunc registers a function that returns a prefix for messages that get printed to the shell console
+func SetShellLogPrefixFunc(logPrefixFunc func(string) string) {
+	logger.shellLogPrefixFunc = logPrefixFunc
+}
+
+// SetColorize sets the flag defining whether to colorize the output to the shell console.
+// The output to log files is never colorized, even if the flag is set to true.
+// Shell console output colorization depends on the message levels:
+// red      - for CRITICAL (non-panic) and ERROR levels
+// yellow   - for WARNING levels
+// green    - for INFO levels produced via Success function call only
+// no color - for all other levels
+func SetColorize(shouldColorize bool) {
+	logger.colorize = shouldColorize
+}
+
 func SetLogFileNameFunc(fileNameFunc func(string, string) string) {
 	logFileNameFunc = fileNameFunc
 }
@@ -190,11 +227,34 @@ func defaultLogPrefixFunc(level string) string {
 	return fmt.Sprintf("%s %s", logTimestamp, fmt.Sprintf(logger.header, level))
 }
 
+// DefaultShortLogPrefixFunc returns a short prefix for messages typically sent to the shell console
+// It does not include the timestamp and other system information that would be found in a log file
+// and only displays the message logging level for WARNING, ERROR, and CRITICAL levels. This function must be
+// explicitly set by the users of the logger by calling SetShellLogPrefixFunc(gplog.DefaultShortLogPrefixFunc)
+func DefaultShortLogPrefixFunc(level string) string {
+	if levelsToPrefix.MatchString(level) {
+		return fmt.Sprintf("%s: ", level)
+	}
+	return ""
+}
+
 func GetLogPrefix(level string) string {
 	if logger.logPrefixFunc != nil {
 		return logger.logPrefixFunc(level)
 	}
 	return defaultLogPrefixFunc(level)
+}
+
+// GetShellLogPrefix returns a prefix to prepend to the message before sending it to the shell console
+// Use this mechanism if it is desired to have different prefixes for messages sent to the console and to the log file.
+// A caller must first set a custom function that will provide a custom prefix by calling SetShellLogPrefixFunc.
+// If the custom function has not been provided, this function returns a prefix produced by the GelLogPrefix function,
+// so that the prefixes for the shell console and the log file will be the same.
+func GetShellLogPrefix(level string) string {
+	if logger.shellLogPrefixFunc != nil {
+		return logger.shellLogPrefixFunc(level)
+	}
+	return GetLogPrefix(level)
 }
 
 func GetLogFilePath() string {
@@ -232,14 +292,26 @@ func SetErrorCode(code int) {
 func Info(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	if logger.fileVerbosity >= LOGINFO || logger.shellVerbosity >= LOGINFO {
+	if logger.fileVerbosity >= LOGINFO {
 		message := GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
-		if logger.fileVerbosity >= LOGINFO {
-			_ = logger.logFile.Output(1, message)
-		}
-		if logger.shellVerbosity >= LOGINFO {
-			_ = logger.logStdout.Output(1, message)
-		}
+		_ = logger.logFile.Output(1, message)
+	}
+	if logger.shellVerbosity >= LOGINFO {
+		message := GetShellLogPrefix("INFO") + fmt.Sprintf(s, v...)
+		_ = logger.logStdout.Output(1, message)
+	}
+}
+
+func Success(s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
+	if logger.fileVerbosity >= LOGINFO {
+		message := GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
+		_ = logger.logFile.Output(1, message)
+	}
+	if logger.shellVerbosity >= LOGINFO {
+		message := GetShellLogPrefix("INFO") + fmt.Sprintf(s, v...)
+		_ = logger.logStdout.Output(1, Colorize(GREEN, message))
 	}
 }
 
@@ -248,7 +320,8 @@ func Warn(s string, v ...interface{}) {
 	defer logMutex.Unlock()
 	message := GetLogPrefix("WARNING") + fmt.Sprintf(s, v...)
 	_ = logger.logFile.Output(1, message)
-	_ = logger.logStdout.Output(1, message)
+	message = GetShellLogPrefix("WARNING") + fmt.Sprintf(s, v...)
+	_ = logger.logStdout.Output(1, Colorize(YELLOW, message))
 }
 
 /*
@@ -265,7 +338,7 @@ func Progress(s string, v ...interface{}) {
 		_ = logger.logFile.Output(1, message)
 	}
 	if logger.shellVerbosity >= LOGVERBOSE {
-		message = GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
+		message = GetShellLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
 		_ = logger.logStdout.Output(1, message)
 	}
 }
@@ -273,55 +346,58 @@ func Progress(s string, v ...interface{}) {
 func Verbose(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	if logger.fileVerbosity >= LOGVERBOSE || logger.shellVerbosity >= LOGVERBOSE {
+	if logger.fileVerbosity >= LOGVERBOSE {
 		message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
-		if logger.fileVerbosity >= LOGVERBOSE {
-			_ = logger.logFile.Output(1, message)
-		}
-		if logger.shellVerbosity >= LOGVERBOSE {
-			_ = logger.logStdout.Output(1, message)
-		}
+		_ = logger.logFile.Output(1, message)
+	}
+	if logger.shellVerbosity >= LOGVERBOSE {
+		message := GetShellLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
+		_ = logger.logStdout.Output(1, message)
 	}
 }
 
 func Debug(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	if logger.fileVerbosity >= LOGDEBUG || logger.shellVerbosity >= LOGDEBUG {
+	if logger.fileVerbosity >= LOGDEBUG {
 		message := GetLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
-		if logger.fileVerbosity >= LOGDEBUG {
-			_ = logger.logFile.Output(1, message)
-		}
-		if logger.shellVerbosity >= LOGDEBUG {
-			_ = logger.logStdout.Output(1, message)
-		}
+		_ = logger.logFile.Output(1, message)
+	}
+	if logger.shellVerbosity >= LOGDEBUG {
+		message := GetShellLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
+		_ = logger.logStdout.Output(1, message)
 	}
 }
 
 func Error(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	message := GetLogPrefix("ERROR") + fmt.Sprintf(s, v...)
 	errorCode = 1
+	message := GetLogPrefix("ERROR") + fmt.Sprintf(s, v...)
 	_ = logger.logFile.Output(1, message)
-	_ = logger.logStderr.Output(1, message)
+	message = GetShellLogPrefix("ERROR") + fmt.Sprintf(s, v...)
+	_ = logger.logStderr.Output(1, Colorize(RED, message))
 }
 
 func Fatal(err error, s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	message := GetLogPrefix("CRITICAL")
 	errorCode = 2
+	suffix := ""
 	stackTraceStr := ""
 	if err != nil {
-		message += fmt.Sprintf("%v", err)
+		suffix += fmt.Sprintf("%v", err)
 		stackTraceStr = formatStackTrace(errors.WithStack(err))
 		if s != "" {
-			message += ": "
+			suffix += ": "
 		}
 	}
-	message += strings.TrimSpace(fmt.Sprintf(s, v...))
+	suffix += strings.TrimSpace(fmt.Sprintf(s, v...))
+	message := GetLogPrefix("CRITICAL") + suffix
 	_ = logger.logFile.Output(1, message+stackTraceStr)
+	message = GetShellLogPrefix("CRITICAL") + suffix
+	// messages for panic are not colorized to allow any recover logic to inspect the actual message
+	// if the message needs to be output to the shell console, the caller should colorize it explicitly, if desired
 	if logger.shellVerbosity >= LOGVERBOSE {
 		abort(message + stackTraceStr)
 	} else {
@@ -342,10 +418,11 @@ func FatalOnError(err error, output ...string) {
 func FatalWithoutPanic(s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	message := GetLogPrefix("CRITICAL") + fmt.Sprintf(s, v...)
 	errorCode = 2
+	message := GetLogPrefix("CRITICAL") + fmt.Sprintf(s, v...)
 	_ = logger.logFile.Output(1, message)
-	_ = logger.logStderr.Output(1, message)
+	message = GetShellLogPrefix("CRITICAL") + fmt.Sprintf(s, v...)
+	_ = logger.logStderr.Output(1, Colorize(RED, message))
 	exitFunc()
 }
 
@@ -404,4 +481,22 @@ func createLogDirectory(dirname string) {
 
 func defaultExit() {
 	os.Exit(1)
+}
+
+// color returns special characters that should be prepended to a string to make it of a particular color on the console
+func color(c int) string {
+	if c == NONE {
+		return fmt.Sprintf("%s[%dm", escape, c)
+	}
+	return fmt.Sprintf("%s[3%dm", escape, c)
+}
+
+// Colorize wraps a string with special characters so that the string has a provided color when output to the console
+// colorization happens only if the logger flag `colorize` is set to true. The function is exported to allow
+// colorization outside the logging methods, such as when recovering from a `panic` when Fatal messages are logged.
+func Colorize(c int, text string) string {
+	if logger.colorize {
+		return color(c) + text + color(NONE)
+	}
+	return text
 }

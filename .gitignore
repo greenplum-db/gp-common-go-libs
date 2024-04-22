@@ -24,4 +24,7 @@ _testmain.go
 *.test
 *.prof
 
+# IntelliJ project metadata
+.idea/
+
 vendor
