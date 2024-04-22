@@ -105,8 +105,6 @@ type GpLogger struct {
 	shellVerbosity     int
 	fileVerbosity      int
 	header             string
-	shellHeader        string
-	fileHeader         string
 	logPrefixFunc      LogPrefixFunc
 	shellLogPrefixFunc LogPrefixFunc
 	colorize           bool
