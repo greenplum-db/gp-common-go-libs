@@ -60,11 +60,14 @@ const (
 	LOGDEBUG
 )
 
-// --- constants for colorized output support
-const escape = "\x1b"
+// ESCAPE - ASCII escape character to start color character sequences
+const ESCAPE = "\x1b"
 
+type Color int
+
+// color codes in the order of their escape character sequences
 const (
-	NONE = iota
+	NONE Color = iota
 	RED
 	GREEN
 	YELLOW
@@ -482,17 +485,17 @@ func defaultExit() {
 }
 
 // color returns special characters that should be prepended to a string to make it of a particular color on the console
-func color(c int) string {
+func color(c Color) string {
 	if c == NONE {
-		return fmt.Sprintf("%s[%dm", escape, c)
+		return fmt.Sprintf("%s[%dm", ESCAPE, c)
 	}
-	return fmt.Sprintf("%s[3%dm", escape, c)
+	return fmt.Sprintf("%s[3%dm", ESCAPE, c)
 }
 
 // Colorize wraps a string with special characters so that the string has a provided color when output to the console
 // colorization happens only if the logger flag `colorize` is set to true. The function is exported to allow
 // colorization outside the logging methods, such as when recovering from a `panic` when Fatal messages are logged.
-func Colorize(c int, text string) string {
+func Colorize(c Color, text string) string {
 	if logger.colorize {
 		return color(c) + text + color(NONE)
 	}
