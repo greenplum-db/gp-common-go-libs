@@ -249,7 +249,7 @@ func GetLogPrefix(level string) string {
 // GetShellLogPrefix returns a prefix to prepend to the message before sending it to the shell console
 // Use this mechanism if it is desired to have different prefixes for messages sent to the console and to the log file.
 // A caller must first set a custom function that will provide a custom prefix by calling SetShellLogPrefixFunc.
-// If the custom function has not been provided, this function returns a prefix produced by the GelLogPrefix function,
+// If the custom function has not been provided, this function returns a prefix produced by the GetLogPrefix function,
 // so that the prefixes for the shell console and the log file will be the same.
 func GetShellLogPrefix(level string) string {
 	if logger.shellLogPrefixFunc != nil {
