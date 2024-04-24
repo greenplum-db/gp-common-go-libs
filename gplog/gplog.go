@@ -215,6 +215,14 @@ func SetColorize(shouldColorize bool) {
 	logger.colorize = shouldColorize
 }
 
+// GetColorize returns whether the colorization of shell console output has been enabled
+func GetColorize() bool {
+	if logger == nil {
+		return false
+	}
+	return logger.colorize
+}
+
 func SetLogFileNameFunc(fileNameFunc func(string, string) string) {
 	logFileNameFunc = fileNameFunc
 }

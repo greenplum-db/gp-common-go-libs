@@ -741,6 +741,11 @@ var _ = Describe("logger/log tests", func() {
 				gplog.SetShellLogPrefixFunc(nil)
 			})
 
+			Context("Initialization", func() {
+				It("returns colorization info", func() {
+					Expect(gplog.GetColorize()).To(BeFalse())
+				})
+			})
 			Context("Info", func() {
 				It("prints to stdout and the log file", func() {
 					expectedMessage := "debug info"
@@ -838,6 +843,11 @@ var _ = Describe("logger/log tests", func() {
 				gplog.SetColorize(false)
 			})
 
+			Context("Initialization", func() {
+				It("returns colorization info", func() {
+					Expect(gplog.GetColorize()).To(BeTrue())
+				})
+			})
 			Context("Info", func() {
 				It("prints to stdout and the log file", func() {
 					expectedMessage := "debug info"
