@@ -57,6 +57,7 @@ func OpenFileWrite(name string, flag int, perm os.FileMode) (io.WriteCloser, err
 type SystemFunctions struct {
 	Chmod         func(name string, mode os.FileMode) error
 	CurrentUser   func() (*user.User, error)
+	Exit          func(code int)
 	Getenv        func(key string) string
 	Getpid        func() int
 	Glob          func(pattern string) (matches []string, err error)
@@ -80,6 +81,7 @@ func InitializeSystemFunctions() *SystemFunctions {
 	return &SystemFunctions{
 		Chmod:         os.Chmod,
 		CurrentUser:   user.Current,
+		Exit:          os.Exit,
 		Getenv:        os.Getenv,
 		Getpid:        os.Getpid,
 		Glob:          filepath.Glob,
