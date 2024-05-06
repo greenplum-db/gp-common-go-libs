@@ -63,6 +63,7 @@ type SystemFunctions struct {
 	Glob          func(pattern string) (matches []string, err error)
 	Hostname      func() (string, error)
 	IsNotExist    func(err error) bool
+	LookupEnv     func(key string) (string, bool)
 	MkdirAll      func(path string, perm os.FileMode) error
 	Now           func() time.Time
 	OpenFileRead  func(name string, flag int, perm os.FileMode) (ReadCloserAt, error)
@@ -88,6 +89,7 @@ func InitializeSystemFunctions() *SystemFunctions {
 		Hostname:      os.Hostname,
 		IsNotExist:    os.IsNotExist,
 		MkdirAll:      os.MkdirAll,
+		LookupEnv:     os.LookupEnv,
 		Now:           time.Now,
 		OpenFileRead:  OpenFileRead,
 		OpenFileWrite: OpenFileWrite,
