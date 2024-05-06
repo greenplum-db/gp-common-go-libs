@@ -81,6 +81,8 @@ const (
  *          cannot be reached.  This function will exit the program after printing
  *          the error message.
  * - FatalWithoutPanic: Same as Fatal, but will not trigger panic. Just exit(1).
+ * - FatalWithoutPanicLogStacktrace(): Same as FatalWithoutPanic, but
+ *          writes the stacktrace into the log file for debug purpose.
  */
 type LogPrefixFunc func(string) string
 type LogFileNameFunc func(string, string) string
@@ -347,6 +349,37 @@ func FatalWithoutPanic(s string, v ...interface{}) {
 	_ = logger.logFile.Output(1, message)
 	_ = logger.logStderr.Output(1, message)
 	exitFunc()
+}
+
+func FatalWithoutPanicLogStacktrace(err error, output ...string){
+	if err != nil {
+		var outputStr string
+		if len(output) == 0 {
+			outputStr = ""
+		} else {
+			outputStr = output[0]
+		}
+		logMutex.Lock()
+		defer logMutex.Unlock()
+		message := GetLogPrefix("CRITICAL")
+		errorCode = 2
+		stackTraceStr := ""
+		if err != nil {
+			message += fmt.Sprintf("%v", err)
+			stackTraceStr = formatStackTrace(errors.WithStack(err))
+			if outputStr != "" {
+				message += ": "
+			}
+		}
+		message += strings.TrimSpace(fmt.Sprintf(outputStr))
+		_ = logger.logFile.Output(1, message+stackTraceStr)
+		if logger.shellVerbosity >= LOGVERBOSE {
+			_ = logger.logStderr.Output(1, message + stackTraceStr)
+		} else {
+			_ = logger.logStderr.Output(1,message)
+		}
+		exitFunc()
+	}
 }
 
 type stackTracer interface {
