@@ -352,6 +352,14 @@ func (dbconn *DBConn) Select(destination interface{}, query string, whichConn ..
 	return dbconn.ConnPool[connNum].Select(destination, query)
 }
 
+func (dbconn *DBConn) SelectContext(ctx context.Context, destination interface{}, query string, whichConn ...int) error {
+	connNum := dbconn.ValidateConnNum(whichConn...)
+	if dbconn.Tx[connNum] != nil {
+		return dbconn.Tx[connNum].SelectContext(ctx, destination, query)
+	}
+	return dbconn.ConnPool[connNum].SelectContext(ctx, destination, query)
+}
+
 func (dbconn *DBConn) QueryWithArgs(query string, args ...interface{}) (*sqlx.Rows, error) {
 	if dbconn.Tx[0] != nil {
 		return dbconn.Tx[0].Queryx(query, args...)
@@ -365,6 +373,14 @@ func (dbconn *DBConn) Query(query string, whichConn ...int) (*sqlx.Rows, error) 
 		return dbconn.Tx[connNum].Queryx(query)
 	}
 	return dbconn.ConnPool[connNum].Queryx(query)
+}
+
+func (dbconn *DBConn) QueryContext(ctx context.Context, query string, whichConn ...int) (*sqlx.Rows, error) {
+	connNum := dbconn.ValidateConnNum(whichConn...)
+	if dbconn.Tx[connNum] != nil {
+		return dbconn.Tx[connNum].QueryxContext(ctx, query)
+	}
+	return dbconn.ConnPool[connNum].QueryxContext(ctx, query)
 }
 
 /*
