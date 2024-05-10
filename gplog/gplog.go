@@ -113,10 +113,6 @@ type GpLogger struct {
 	colorize           bool
 }
 
-// levelsToPrefix is a regex for determining if the message level will be shown on console
-// by the DefaultShortLogPrefixFunc function
-var levelsToPrefix = regexp.MustCompile(`WARNING|ERROR|CRITICAL`)
-
 /*
  * Logger initialization/helper functions
  */
@@ -235,6 +231,10 @@ func defaultLogPrefixFunc(level string) string {
 	logTimestamp := operating.System.Now().Format("20060102:15:04:05")
 	return fmt.Sprintf("%s %s", logTimestamp, fmt.Sprintf(logger.header, level))
 }
+
+// levelsToPrefix is a regex for determining if the message level will be shown on console
+// by the DefaultShortLogPrefixFunc function
+var levelsToPrefix = regexp.MustCompile(`WARNING|ERROR|CRITICAL`)
 
 // DefaultShortLogPrefixFunc returns a short prefix for messages typically sent to the shell console
 // It does not include the timestamp and other system information that would be found in a log file
@@ -392,25 +392,25 @@ func Fatal(err error, s string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 	errorCode = 2
-	suffix := ""
+	message := ""
 	stackTraceStr := ""
 	if err != nil {
-		suffix += fmt.Sprintf("%v", err)
+		message += fmt.Sprintf("%v", err)
 		stackTraceStr = formatStackTrace(errors.WithStack(err))
 		if s != "" {
-			suffix += ": "
+			message += ": "
 		}
 	}
-	suffix += strings.TrimSpace(fmt.Sprintf(s, v...))
-	message := GetLogPrefix("CRITICAL") + suffix
-	_ = logger.logFile.Output(1, message+stackTraceStr)
-	message = GetShellLogPrefix("CRITICAL") + suffix
-	// messages for panic are not colorized to allow any recover logic to inspect the actual message
-	// if the message needs to be output to the shell console, the caller should colorize it explicitly, if desired
+	message += strings.TrimSpace(fmt.Sprintf(s, v...))
+	fullMessage := GetLogPrefix("CRITICAL") + message
+	_ = logger.logFile.Output(1, fullMessage+stackTraceStr)
+	fullMessage = GetShellLogPrefix("CRITICAL") + message
+	// messages for panic are not colorized to allow any recover logic to inspect the actual fullMessage
+	// if the fullMessage needs to be output to the shell console, the caller should colorize it explicitly, if desired
 	if logger.shellVerbosity >= LOGVERBOSE {
-		abort(message + stackTraceStr)
+		abort(fullMessage + stackTraceStr)
 	} else {
-		abort(message)
+		abort(fullMessage)
 	}
 }
 
