@@ -559,7 +559,7 @@ var _ = Describe("cluster/cluster tests", func() {
 			}
 			defer testhelper.ShouldPanicWithMessage(fmt.Sprintf("Got an error on %s. See gbytes.Buffer for a complete list of errors.", errStr))
 			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the command`))
-			defer Expect(logfile).To(gbytes.Say(fmt.Sprintf(`\[DEBUG\]:-Error received on %s with error command error: exit status 1`, debugStr)))
+			defer Expect(logfile).To(gbytes.Say(fmt.Sprintf(`\[ERROR\]:-Error received on %s with error command error: exit status 1`, debugStr)))
 			testCluster.CheckClusterError(remoteOutput, "Got an error", generatorFunc)
 		},
 			Entry("prints error messages for a per-segment command, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, true, true, true),
