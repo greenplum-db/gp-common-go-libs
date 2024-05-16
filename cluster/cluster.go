@@ -388,10 +388,10 @@ func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMs
 		case func(content int) string:
 			content := failedCommand.Content
 			host := cluster.GetHostForContent(content)
-			gplog.Verbose("%s on segment %d on host %s %s", getMessage(content), content, host, errStr)
+			gplog.Custom(gplog.LOGERROR, gplog.LOGVERBOSE, "%s on segment %d on host %s %s", getMessage(content), content, host, errStr)
 		case func(host string) string:
 			host := failedCommand.Host
-			gplog.Verbose("%s on host %s %s", getMessage(host), host, errStr)
+			gplog.Custom(gplog.LOGERROR, gplog.LOGVERBOSE, "%s on host %s %s", getMessage(host), host, errStr)
 		}
 		gplog.Verbose("Command was: %s", failedCommand.CommandString)
 	}
