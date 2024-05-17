@@ -294,6 +294,20 @@ func SetErrorCode(code int) {
 	errorCode = code
 }
 
+func getVerbosityString(verbosity int) string {
+	switch verbosity {
+	case LOGERROR:
+		return "ERROR"
+	case LOGINFO:
+		return "INFO"
+	case LOGVERBOSE:
+		return "DEBUG"
+	case LOGDEBUG:
+		return "DEBUG"
+	}
+	return ""
+}
+
 /*
  * Log output functions, as described above
  */
@@ -331,25 +345,6 @@ func Warn(s string, v ...interface{}) {
 	_ = logger.logFile.Output(1, message)
 	message = GetShellLogPrefix("WARNING") + fmt.Sprintf(s, v...)
 	_ = logger.logStdout.Output(1, Colorize(YELLOW, message))
-}
-
-/*
- * Progress is for messages that show progress as an alternative to a progress bar.
- * We write them to the log file if fileVerbosity is >= LOGINFO, and we write them to stdout if shellVerbosity >= LOGVERBOSE
- */
-
-func Progress(s string, v ...interface{}) {
-	logMutex.Lock()
-	defer logMutex.Unlock()
-	var message string
-	if logger.fileVerbosity >= LOGINFO {
-		message = GetLogPrefix("INFO") + fmt.Sprintf(s, v...)
-		_ = logger.logFile.Output(1, message)
-	}
-	if logger.shellVerbosity >= LOGVERBOSE {
-		message = GetShellLogPrefix("DEBUG") + fmt.Sprintf(s, v...)
-		_ = logger.logStdout.Output(1, message)
-	}
 }
 
 func Verbose(s string, v ...interface{}) {
@@ -412,6 +407,36 @@ func Fatal(err error, s string, v ...interface{}) {
 	} else {
 		abort(fullMessage)
 	}
+}
+
+/*
+ * The Custom log function allows a caller to set different verbosity thresholds for logging to the shell or logfile
+ */
+
+func Custom(customFileVerbosity int, customShellVerbosity int, s string, v ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
+	var message string
+	if logger.fileVerbosity >= customFileVerbosity {
+		message = GetLogPrefix(getVerbosityString(customFileVerbosity)) + fmt.Sprintf(s, v...)
+		_ = logger.logFile.Output(1, message)
+	}
+	if customShellVerbosity == LOGERROR {
+		message = GetShellLogPrefix("ERROR") + fmt.Sprintf(s, v...)
+		_ = logger.logStderr.Output(1, Colorize(RED, message))
+	} else if logger.shellVerbosity >= customShellVerbosity {
+		message = GetShellLogPrefix(getVerbosityString(customShellVerbosity)) + fmt.Sprintf(s, v...)
+		_ = logger.logStdout.Output(1, message)
+	}
+}
+
+/*
+ * Progress is a wrapper around the Custom logging function for messages that show progress as an alternative to a progress bar.
+ * We write them to the log file if fileVerbosity is >= LOGINFO, and we write them to stdout if shellVerbosity >= LOGVERBOSE
+ */
+
+func Progress(s string, v ...interface{}) {
+	Custom(LOGINFO, LOGVERBOSE, s, v...)
 }
 
 func FatalOnError(err error, output ...string) {
