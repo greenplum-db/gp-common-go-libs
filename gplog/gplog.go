@@ -430,15 +430,6 @@ func Custom(customFileVerbosity int, customShellVerbosity int, s string, v ...in
 	}
 }
 
-/*
- * Progress is a wrapper around the Custom logging function for messages that show progress as an alternative to a progress bar.
- * We write them to the log file if fileVerbosity is >= LOGINFO, and we write them to stdout if shellVerbosity >= LOGVERBOSE
- */
-
-func Progress(s string, v ...interface{}) {
-	Custom(LOGINFO, LOGVERBOSE, s, v...)
-}
-
 func FatalOnError(err error, output ...string) {
 	if err != nil {
 		if len(output) == 0 {
