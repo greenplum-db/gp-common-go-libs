@@ -311,15 +311,6 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(logfile, errorExpected+expectedMessage)
 				})
 			})
-			Context("Progress", func() {
-				It("prints to the log file", func() {
-					expectedMessage := "error progress"
-					gplog.Progress(expectedMessage)
-					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
-					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
-					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
-				})
-			})
 		})
 		Describe("Shell verbosity set to Info", func() {
 			BeforeEach(func() {
@@ -418,15 +409,6 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(stdout, infoExpected+expectedMessage)
 					testhelper.NotExpectRegexp(stderr, infoExpected+expectedMessage)
 					testhelper.ExpectRegexp(logfile, errorExpected+expectedMessage)
-				})
-			})
-			Context("Progress", func() {
-				It("prints to the log file", func() {
-					expectedMessage := "info progress"
-					gplog.Progress(expectedMessage)
-					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
-					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
-					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
 				})
 			})
 		})
@@ -530,15 +512,6 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(logfile, errorExpected+expectedMessage)
 				})
 			})
-			Context("Progress", func() {
-				It("prints to stdout and the log file", func() {
-					expectedMessage := "verbose progress"
-					gplog.Progress(expectedMessage)
-					testhelper.ExpectRegexp(stdout, verboseExpected+expectedMessage)
-					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
-					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
-				})
-			})
 		})
 		Describe("Shell verbosity set to Debug", func() {
 			BeforeEach(func() {
@@ -637,15 +610,6 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(stdout, infoExpected+expectedMessage)
 					testhelper.NotExpectRegexp(stderr, infoExpected+expectedMessage)
 					testhelper.ExpectRegexp(logfile, errorExpected+expectedMessage)
-				})
-			})
-			Context("Progress", func() {
-				It("prints to stdout and the log file", func() {
-					expectedMessage := "debug progress"
-					gplog.Progress(expectedMessage)
-					testhelper.ExpectRegexp(stdout, verboseExpected+expectedMessage)
-					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
-					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
 				})
 			})
 		})
@@ -761,15 +725,6 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(logfile, errorExpected+expectedMessage)
 				})
 			})
-			Context("Progress", func() {
-				It("does not print", func() {
-					expectedMessage := "logfile error progress"
-					gplog.Progress(expectedMessage)
-					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
-					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
-					testhelper.NotExpectRegexp(logfile, infoExpected+expectedMessage)
-				})
-			})
 		})
 		Describe("Shell verbosity set to Info, logfile verbosity set to Info", func() {
 			BeforeEach(func() {
@@ -881,15 +836,6 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.ExpectRegexp(stdout, infoExpected+expectedMessage)
 					testhelper.NotExpectRegexp(stderr, infoExpected+expectedMessage)
 					testhelper.ExpectRegexp(logfile, errorExpected+expectedMessage)
-				})
-			})
-			Context("Progress", func() {
-				It("prints to the log file", func() {
-					expectedMessage := "logfile info progress"
-					gplog.Progress(expectedMessage)
-					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
-					testhelper.NotExpectRegexp(stderr, verboseExpected+expectedMessage)
-					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
 				})
 			})
 		})
@@ -1010,16 +956,6 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.NotExpectRegexp(stdout, infoExpected+expectedMessage)
 					testhelper.NotExpectRegexp(stderr, expectedMessage)
 					testhelper.ExpectRegexp(logfile, errorExpected+expectedMessage)
-				})
-			})
-			Context("Progress", func() {
-				It("prints to stdout and the log file", func() {
-					expectedMessage := "debug progress"
-					gplog.Progress(expectedMessage)
-					testhelper.ExpectRegexp(stdout, expectedMessage)
-					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
-					testhelper.NotExpectRegexp(stderr, expectedMessage)
-					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
 				})
 			})
 		})
@@ -1146,16 +1082,6 @@ var _ = Describe("logger/log tests", func() {
 					testhelper.NotExpectRegexp(stdout, infoExpected+expectedMessage)
 					testhelper.NotExpectRegexp(stderr, expectedMessage)
 					testhelper.ExpectRegexp(logfile, errorExpected+expectedMessage)
-				})
-			})
-			Context("Progress", func() {
-				It("prints to stdout and the log file", func() {
-					expectedMessage := "debug progress"
-					gplog.Progress(expectedMessage)
-					testhelper.ExpectRegexp(stdout, expectedMessage)
-					testhelper.NotExpectRegexp(stdout, verboseExpected+expectedMessage)
-					testhelper.NotExpectRegexp(stderr, expectedMessage)
-					testhelper.ExpectRegexp(logfile, infoExpected+expectedMessage)
 				})
 			})
 		})
