@@ -435,6 +435,9 @@ func getSegmentByRole(segmentList []*SegConfig, role ...string) *SegConfig {
 		}
 		return segmentList[1]
 	}
+	if len(segmentList) == 0 {
+		return nil
+	}
 	return segmentList[0]
 }
 
