@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/greenplum-db/gp-common-go-libs/operating"
+	"github.com/jackc/pgconn"
 	"github.com/pkg/errors"
 )
 
@@ -390,7 +391,12 @@ func Fatal(err error, s string, v ...interface{}) {
 	message := ""
 	stackTraceStr := ""
 	if err != nil {
-		message += fmt.Sprintf("%v", err)
+		if _, ok := err.(*pgconn.PgError); ok {
+			message += fmt.Sprintf("%v", err)
+		} else {
+			message += fmt.Sprintf("%v; ", err.(*pgconn.PgError).Message)
+			message += fmt.Sprintf("%v ", err.(*pgconn.PgError).Detail)
+		}
 		stackTraceStr = formatStackTrace(errors.WithStack(err))
 		if s != "" {
 			message += ": "
