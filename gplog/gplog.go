@@ -391,7 +391,7 @@ func Fatal(err error, s string, v ...interface{}) {
 	message := ""
 	stackTraceStr := ""
 	if err != nil {
-		if _, ok := err.(*pgconn.PgError); ok {
+		if _, ok := err.(*pgconn.PgError); !ok {
 			message += fmt.Sprintf("%v", err)
 		} else {
 			message += fmt.Sprintf("%v; ", err.(*pgconn.PgError).Message)
