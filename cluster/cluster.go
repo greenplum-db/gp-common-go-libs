@@ -8,6 +8,7 @@ package cluster
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,6 +25,7 @@ import (
 
 type Executor interface {
 	ExecuteLocalCommand(commandStr string) (string, error)
+	ExecuteLocalCommandWithContext(commandStr string, ctx context.Context) (string, error)
 	ExecuteClusterCommand(scope Scope, commandList []ShellCommand) *RemoteOutput
 }
 
@@ -327,6 +329,11 @@ func (cluster *Cluster) GenerateSSHCommandList(scope Scope, generator interface{
 
 func (executor *GPDBExecutor) ExecuteLocalCommand(commandStr string) (string, error) {
 	output, err := exec.Command("bash", "-c", commandStr).CombinedOutput()
+	return string(output), err
+}
+
+func (executor *GPDBExecutor) ExecuteLocalCommandWithContext(commandStr string, ctx context.Context) (string, error) {
+	output, err := exec.CommandContext(ctx, "bash", "-c", commandStr).CombinedOutput()
 	return string(output), err
 }
 
