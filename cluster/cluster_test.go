@@ -3,6 +3,7 @@ package cluster_test
 import (
 	"context"
 	"database/sql/driver"
+	joinerrs "errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -10,17 +11,16 @@ import (
 	"testing"
 	"time"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
-
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/greenplum-db/gp-common-go-libs/cluster"
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"
 	"github.com/greenplum-db/gp-common-go-libs/operating"
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/pkg/errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gbytes"
 )
 
 func TestCluster(t *testing.T) {
@@ -78,6 +78,7 @@ var _ = Describe("cluster/cluster tests", func() {
 		testExecutor = &testhelper.TestExecutor{}
 		testCluster = cluster.NewCluster([]cluster.SegConfig{coordinatorSeg, localSegOne, remoteSegOne})
 		testCluster.Executor = testExecutor
+		logfile.Clear()
 	})
 	Describe("ConstructSSHCommand", func() {
 		It("constructs a local ssh command", func() {
@@ -556,58 +557,203 @@ var _ = Describe("cluster/cluster tests", func() {
 			}
 		})
 	})
-	Describe("CheckClusterError", func() {
-		var (
-			remoteOutput *cluster.RemoteOutput
-			failedCmd    cluster.ShellCommand
-		)
+	Describe("ExecuteClusterCommandWithRetries", func() {
+		var testDir = "/tmp/gp_common_go_libs_test"
 		BeforeEach(func() {
-			failedCmd = cluster.ShellCommand{
-				Scope:         0, // The appropriate scope will be set in each test
-				Content:       1,
-				Host:          "remotehost1",
-				Command:       nil,
-				CommandString: "this is the command",
-				Stderr:        "exit status 1",
-				Error:         errors.Errorf("command error"),
-			}
-			remoteOutput = &cluster.RemoteOutput{
-				Scope:          0,
-				NumErrors:      1,
-				Commands:       []cluster.ShellCommand{failedCmd},
-				FailedCommands: []*cluster.ShellCommand{&failedCmd},
-			}
+			os.MkdirAll(testDir, 0777)
 		})
-		DescribeTable("CheckClusterError", func(scope cluster.Scope, includeCoordinator bool, perSegment bool, remote bool) {
-			remoteOutput.Scope = scope
-			remoteOutput.Commands[0].Scope = scope
-			remoteOutput.FailedCommands[0].Scope = scope
-			errStr := "1 segment"
-			debugStr := "segment 1 on host remotehost1"
-			var generatorFunc interface{}
-			generatorFunc = func(contentID int) string { return "Error received" }
-			if !perSegment {
-				errStr = "1 host"
-				debugStr = "host remotehost1"
+		AfterEach(func() {
+			os.RemoveAll(testDir)
+		})
+		It("retries a command until it passes", func() {
+			scriptFile, _ := os.OpenFile(path.Join(testDir, "incr.bash"), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
+			// This script increments a number in a file and returns an error until it reaches 3 and returns success
+			scriptFmt := `#!/bin/bash
+n=$(cat %s/num.txt)
+m=$((n+1))
+if [ "$m" -lt "3" ]; then
+	echo $m > %s/num.txt
+	exit 1
+fi`
+			scriptFile.WriteString(fmt.Sprintf(scriptFmt, testDir, testDir))
+			scriptFile.Close()
+			os.WriteFile(path.Join(testDir, "num.txt"), []byte{'0'}, 0777)
+			testCluster := cluster.Cluster{}
+			commandList := []cluster.ShellCommand{
+				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, -1, "", []string{"touch", path.Join(testDir, "foo")}),
+				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, 0, "", []string{"bash", "-c", path.Join(testDir, "incr.bash")}),
+			}
+			testCluster.Executor = &cluster.GPDBExecutor{}
+			clusterOutput := testCluster.ExecuteClusterCommandWithRetries(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, commandList, 5, 5*time.Millisecond)
+			expectPathToExist(path.Join(testDir, "foo"))
+			Expect(clusterOutput.NumErrors).To(Equal(0))
+			Expect(clusterOutput.FailedCommands).To(HaveLen(0))
+			Expect(clusterOutput.RetriedCommands).To(HaveLen(1))
+			Expect(clusterOutput.RetriedCommands[0].RetryError.Error()).To(Equal("attempt 1: error was exit status 1: \nattempt 2: error was exit status 1: "))
+		})
+		It("retries a command until it reaches max retries", func() {
+			testCluster := cluster.Cluster{}
+			commandList := []cluster.ShellCommand{
+				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, -1, "", []string{"touch", path.Join(testDir, "foo")}),
+				cluster.NewShellCommand(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, 0, "", []string{"some-non-existent-command"}),
+			}
+			testCluster.Executor = &cluster.GPDBExecutor{}
+			clusterOutput := testCluster.ExecuteClusterCommandWithRetries(cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, commandList, 3, 5*time.Millisecond)
+			expectedErrMsg := "exec: \"some-non-existent-command\": executable file not found in $PATH"
+			expectPathToExist(path.Join(testDir, "foo"))
+			Expect(clusterOutput.NumErrors).To(Equal(1))
+			Expect(clusterOutput.FailedCommands).To(HaveLen(1))
+			Expect(clusterOutput.RetriedCommands).To(HaveLen(0))
+			Expect(clusterOutput.FailedCommands[0].Error.Error()).To(Equal(expectedErrMsg))
+			Expect(clusterOutput.FailedCommands[0].RetryError.Error()).To(Equal(fmt.Sprintf("attempt 1: error was %s: \nattempt 2: error was %s: \nattempt 3: error was %s: ", expectedErrMsg, expectedErrMsg, expectedErrMsg)))
+		})
+	})
+	Describe("CheckClusterError", func() {
+		Context("FailedCommands", func() {
+			var (
+				remoteOutput *cluster.RemoteOutput
+				failedCmd    cluster.ShellCommand
+			)
+			BeforeEach(func() {
+				failedCmd = cluster.ShellCommand{
+					Scope:         0, // The appropriate scope will be set in each test
+					Content:       1,
+					Host:          "remotehost1",
+					Command:       nil,
+					CommandString: "this is the command",
+					Stderr:        "exit status 1",
+					Error:         fmt.Errorf("command error"),
+				}
+				remoteOutput = &cluster.RemoteOutput{
+					Scope:          0,
+					NumErrors:      1,
+					Commands:       []cluster.ShellCommand{failedCmd},
+					FailedCommands: []cluster.ShellCommand{failedCmd},
+				}
+			})
+			DescribeTable("CheckClusterError", func(scope cluster.Scope, perSegment bool, remote bool) {
+				remoteOutput.Scope = scope
+				remoteOutput.Commands[0].Scope = scope
+				remoteOutput.FailedCommands[0].Scope = scope
+				errStr := "1 segment"
+				debugStr := "segment 1 on host remotehost1"
+				var generatorFunc interface{}
+				generatorFunc = func(contentID int) string { return "Error received" }
+				if !perSegment {
+					errStr = "1 host"
+					debugStr = "host remotehost1"
+					generatorFunc = func(host string) string { return "Error received" }
+				}
+				if !remote {
+					errStr = "coordinator for " + errStr
+				}
+				defer testhelper.ShouldPanicWithMessage(fmt.Sprintf("Got an error on %s. See gbytes.Buffer for a complete list of errors.", errStr))
+				defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the command`))
+				defer Expect(logfile).To(gbytes.Say(fmt.Sprintf(`\[ERROR\]:-Error received on %s with error command error: exit status 1`, debugStr)))
+				testCluster.CheckClusterError(remoteOutput, "Got an error", generatorFunc)
+			},
+				Entry("prints error messages for a per-segment command, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, true, true),
+				Entry("prints error messages for a per-segment command, excluding coordinator", cluster.ON_SEGMENTS, true, true),
+				Entry("prints error messages for a per-host command, including the coordinator host", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR, false, true),
+				Entry("prints error messages for a per-host command, excluding the coordinator host", cluster.ON_HOSTS, false, true),
+				Entry("prints error messages for commands executed on coordinator to segments, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR|cluster.ON_LOCAL, true, false),
+				Entry("prints error messages for commands executed on coordinator to segments, excluding coordinator", cluster.ON_SEGMENTS|cluster.ON_LOCAL, true, false),
+				Entry("prints error messages for commands executed on coordinator to hosts, including coordinator", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR|cluster.ON_LOCAL, false, false),
+				Entry("prints error messages for commands executed on coordinator to hosts, excluding coordinator", cluster.ON_HOSTS|cluster.ON_LOCAL, false, false),
+			)
+		})
+		Context("RetriedCommands", func() {
+			var (
+				remoteOutput  *cluster.RemoteOutput
+				retriedCmd    cluster.ShellCommand
+				failedCmd     cluster.ShellCommand
+				retryErrStr   string
+				generatorFunc interface{}
+			)
+			BeforeEach(func() {
+				retryErr := joinerrs.Join(errors.New("attempt 1: this is an error"), errors.New("attempt 2: this is an error"))
+				retriedCmd = cluster.ShellCommand{
+					Scope:         0,
+					Content:       1,
+					Host:          "remotehost1",
+					Command:       nil,
+					CommandString: "this is the retry command",
+					Stderr:        "",
+					Error:         nil,
+					RetryError:    retryErr,
+				}
+				failedCmd = cluster.ShellCommand{
+					Scope:         0,
+					Content:       1,
+					Host:          "remotehost1",
+					Command:       nil,
+					CommandString: "this is the failed command",
+					Stderr:        "exit status 1",
+					Error:         fmt.Errorf("command error"),
+				}
+				remoteOutput = &cluster.RemoteOutput{
+					Scope:           0,
+					NumErrors:       0,
+					Commands:        []cluster.ShellCommand{retriedCmd},
+					RetriedCommands: []cluster.ShellCommand{retriedCmd},
+				}
+				retryErrStr = "\nattempt 1: this is an error\nattempt 2: this is an error"
+			})
+			It("prints retry error messages for a per-segment command", func() {
+				generatorFunc = func(contentID int) string { return "Error received" }
+				testCluster.CheckClusterError(remoteOutput, "Got an error", generatorFunc)
+				Expect(logfile).To(gbytes.Say(fmt.Sprintf(`\[DEBUG\]:-Command failed before passing on segment 1 on host remotehost1 with error:%s`, retryErrStr)))
+				Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the retry command`))
+			})
+			It("prints retry error messages for a per-host command", func() {
 				generatorFunc = func(host string) string { return "Error received" }
-			}
-			if !remote {
-				errStr = "coordinator for " + errStr
-			}
-			defer testhelper.ShouldPanicWithMessage(fmt.Sprintf("Got an error on %s. See gbytes.Buffer for a complete list of errors.", errStr))
-			defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the command`))
-			defer Expect(logfile).To(gbytes.Say(fmt.Sprintf(`\[ERROR\]:-Error received on %s with error command error: exit status 1`, debugStr)))
-			testCluster.CheckClusterError(remoteOutput, "Got an error", generatorFunc)
-		},
-			Entry("prints error messages for a per-segment command, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR, true, true, true),
-			Entry("prints error messages for a per-segment command, excluding coordinator", cluster.ON_SEGMENTS, false, true, true),
-			Entry("prints error messages for a per-host command, including the coordinator host", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR, true, false, true),
-			Entry("prints error messages for a per-host command, excluding the coordinator host", cluster.ON_HOSTS, false, false, true),
-			Entry("prints error messages for commands executed on coordinator to segments, including coordinator", cluster.ON_SEGMENTS|cluster.INCLUDE_COORDINATOR|cluster.ON_LOCAL, true, true, false),
-			Entry("prints error messages for commands executed on coordinator to segments, excluding coordinator", cluster.ON_SEGMENTS|cluster.ON_LOCAL, false, true, false),
-			Entry("prints error messages for commands executed on coordinator to hosts, including coordinator", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR|cluster.ON_LOCAL, true, false, false),
-			Entry("prints error messages for commands executed on coordinator to hosts, excluding coordinator", cluster.ON_HOSTS|cluster.ON_LOCAL, false, false, false),
-		)
+				testCluster.CheckClusterError(remoteOutput, "Got an error", generatorFunc)
+				Expect(logfile).To(gbytes.Say(fmt.Sprintf(`\[DEBUG\]:-Command failed before passing on host remotehost1 with error:%s`, retryErrStr)))
+				Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the retry command`))
+			})
+			It("prints retry error messages before failed error messages", func() {
+				remoteOutput = &cluster.RemoteOutput{
+					Scope:           0,
+					NumErrors:       1,
+					Commands:        []cluster.ShellCommand{retriedCmd, failedCmd},
+					FailedCommands:  []cluster.ShellCommand{failedCmd},
+					RetriedCommands: []cluster.ShellCommand{retriedCmd},
+				}
+				generatorFunc = func(contentID int) string { return "Error received" }
+				defer testhelper.ShouldPanicWithMessage("Got an error on 1 segment. See gbytes.Buffer for a complete list of errors.")
+				defer Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the failed command`))
+				defer Expect(logfile).To(gbytes.Say(`\[ERROR\]:-Error received on segment 1 on host remotehost1 with error command error: exit status 1`))
+				testCluster.CheckClusterError(remoteOutput, "Got an error", generatorFunc)
+				Expect(logfile).To(gbytes.Say(fmt.Sprintf(`\[DEBUG\]:-Command failed before passing on segment 1 on host remotehost1 with error:%s`, retryErrStr)))
+				Expect(logfile).To(gbytes.Say(`\[DEBUG\]:-Command was: this is the retry command`))
+			})
+		})
+		Context("No errors", func() {
+			var (
+				successfulCmd = cluster.ShellCommand{
+					Scope:         0,
+					Content:       1,
+					Host:          "remotehost1",
+					Command:       nil,
+					CommandString: "this is the successful command",
+					Stderr:        "",
+					Error:         nil,
+					RetryError:    nil,
+				}
+				remoteOutput = &cluster.RemoteOutput{
+					Scope:           0,
+					NumErrors:       0,
+					Commands:        []cluster.ShellCommand{successfulCmd},
+					FailedCommands:  []cluster.ShellCommand{},
+					RetriedCommands: []cluster.ShellCommand{},
+				}
+				generatorFunc = func(contentID int) string { return "Error received" }
+			)
+			It("prints nothing if there are no retried or failed commands", func() {
+				testCluster.CheckClusterError(remoteOutput, "Got an error", generatorFunc)
+				Expect(logfile).ToNot(gbytes.Say("error"))
+			})
+		})
 	})
 	Describe("LogFatalClusterError", func() {
 		It("logs an error for 1 segment (with coordinator)", func() {
@@ -625,6 +771,74 @@ var _ = Describe("cluster/cluster tests", func() {
 		It("logs an error for more than 1 host (with coordinator)", func() {
 			defer testhelper.ShouldPanicWithMessage("Error occurred on 2 hosts. See gbytes.Buffer for a complete list of errors.")
 			cluster.LogFatalClusterError("Error occurred", cluster.ON_HOSTS|cluster.INCLUDE_COORDINATOR, 2)
+		})
+	})
+	Describe("NewRemoteOutput", func() {
+		var (
+			retryErr   = joinerrs.Join(errors.New("attempt 1: this is an error"), errors.New("attempt 2: this is an error"))
+			retriedCmd = cluster.ShellCommand{
+				Scope:         0,
+				Content:       1,
+				Host:          "remotehost1",
+				Command:       nil,
+				CommandString: "this is the retry command",
+				Stderr:        "",
+				Error:         nil,
+				RetryError:    retryErr,
+			}
+			failedCmd = cluster.ShellCommand{
+				Scope:         0,
+				Content:       1,
+				Host:          "remotehost1",
+				Command:       nil,
+				CommandString: "this is the failed command",
+				Stderr:        "exit status 1",
+				Error:         fmt.Errorf("command error"),
+				RetryError:    retryErr,
+			}
+			successfulCmd = cluster.ShellCommand{
+				Scope:         0,
+				Content:       1,
+				Host:          "remotehost1",
+				Command:       nil,
+				CommandString: "this is the successful command",
+				Stderr:        "",
+				Error:         nil,
+				RetryError:    nil,
+			}
+			commands []cluster.ShellCommand
+		)
+		It("can create a remote output with no failed or retried commands", func() {
+			commands = []cluster.ShellCommand{successfulCmd}
+			output := cluster.NewRemoteOutput(0, 0, commands)
+			Expect(output.NumErrors).To(Equal(0))
+			Expect(output.Commands).To(HaveLen(1))
+			Expect(output.FailedCommands).To(HaveLen(0))
+			Expect(output.RetriedCommands).To(HaveLen(0))
+		})
+		It("can create a remote output with failed commands", func() {
+			commands = []cluster.ShellCommand{successfulCmd, failedCmd}
+			output := cluster.NewRemoteOutput(0, 1, commands)
+			Expect(output.NumErrors).To(Equal(1))
+			Expect(output.Commands).To(HaveLen(2))
+			Expect(output.FailedCommands[0]).To(Equal(failedCmd))
+			Expect(output.RetriedCommands).To(HaveLen(0))
+		})
+		It("can create a remote output with retried commands", func() {
+			commands = []cluster.ShellCommand{successfulCmd, retriedCmd}
+			output := cluster.NewRemoteOutput(0, 0, commands)
+			Expect(output.NumErrors).To(Equal(0))
+			Expect(output.Commands).To(HaveLen(2))
+			Expect(output.FailedCommands).To(HaveLen(0))
+			Expect(output.RetriedCommands[0]).To(Equal(retriedCmd))
+		})
+		It("can create a remote output with failed and retry commands", func() {
+			commands = []cluster.ShellCommand{successfulCmd, retriedCmd, failedCmd}
+			output := cluster.NewRemoteOutput(0, 1, commands)
+			Expect(output.NumErrors).To(Equal(1))
+			Expect(output.Commands).To(HaveLen(3))
+			Expect(output.FailedCommands[0]).To(Equal(failedCmd))
+			Expect(output.RetriedCommands[0]).To(Equal(retriedCmd))
 		})
 	})
 	Describe("NewCluster", func() {
