@@ -9,6 +9,7 @@ import (
 	"github.com/greenplum-db/gp-common-go-libs/cluster"
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/jmoiron/sqlx"
+	"time"
 )
 
 type TestDriver struct {
@@ -123,6 +124,23 @@ func (executor *TestExecutor) ExecuteLocalCommandWithContext(commandStr string, 
 }
 
 func (executor *TestExecutor) ExecuteClusterCommand(scope cluster.Scope, commandList []cluster.ShellCommand) *cluster.RemoteOutput {
+	executor.NumExecutions++
+	executor.NumClusterExecutions++
+	executor.ClusterCommands = append(executor.ClusterCommands, commandList)
+	if executor.ClusterOutputs != nil {
+		if executor.NumClusterExecutions <= len(executor.ClusterOutputs) {
+			return executor.ClusterOutputs[executor.NumClusterExecutions-1]
+		} else if executor.UseLastOutput {
+			return executor.ClusterOutputs[len(executor.ClusterOutputs)-1]
+		} else if executor.UseDefaultOutput {
+			return executor.ClusterOutput
+		}
+		gplog.Fatal(nil, "ExecuteClusterCommand called %d times, but only %d ClusterOutputs provided", executor.NumClusterExecutions, len(executor.ClusterOutputs))
+	}
+	return executor.ClusterOutput
+}
+
+func (executor *TestExecutor) ExecuteClusterCommandWithRetries(scope cluster.Scope, commandList []cluster.ShellCommand, maxAttempts int, retrySleep time.Duration) *cluster.RemoteOutput {
 	executor.NumExecutions++
 	executor.NumClusterExecutions++
 	executor.ClusterCommands = append(executor.ClusterCommands, commandList)

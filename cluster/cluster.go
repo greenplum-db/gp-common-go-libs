@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	joinerrs "errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
@@ -27,6 +29,7 @@ type Executor interface {
 	ExecuteLocalCommand(commandStr string) (string, error)
 	ExecuteLocalCommandWithContext(commandStr string, ctx context.Context) (string, error)
 	ExecuteClusterCommand(scope Scope, commandList []ShellCommand) *RemoteOutput
+	ExecuteClusterCommandWithRetries(scope Scope, commandList []ShellCommand, maxAttempts int, retrySleep time.Duration) *RemoteOutput
 }
 
 // This type only exists to allow us to mock Execute[...]Command functions for testing
@@ -178,6 +181,7 @@ type ShellCommand struct {
 	Stdout        string
 	Stderr        string
 	Error         error
+	RetryError    error
 	Completed     bool
 }
 
@@ -196,26 +200,29 @@ func NewShellCommand(scope Scope, content int, host string, command []string) Sh
  * of a cluster command and to display the results to the user.
  */
 type RemoteOutput struct {
-	Scope          Scope
-	NumErrors      int
-	Commands       []ShellCommand
-	FailedCommands []*ShellCommand
+	Scope           Scope
+	NumErrors       int
+	Commands        []ShellCommand
+	FailedCommands  []ShellCommand
+	RetriedCommands []ShellCommand
 }
 
 func NewRemoteOutput(scope Scope, numErrors int, commands []ShellCommand) *RemoteOutput {
-	failedCommands := make([]*ShellCommand, numErrors)
-	index := 0
-	for i := range commands {
-		if commands[i].Error != nil {
-			failedCommands[index] = &commands[i]
-			index++
+	failedCommands := make([]ShellCommand, 0)
+	retriedCommands := make([]ShellCommand, 0)
+	for _, command := range commands {
+		if command.Error != nil {
+			failedCommands = append(failedCommands, command)
+		} else if command.RetryError != nil {
+			retriedCommands = append(retriedCommands, command)
 		}
 	}
 	return &RemoteOutput{
-		Scope:          scope,
-		NumErrors:      numErrors,
-		Commands:       commands,
-		FailedCommands: failedCommands,
+		Scope:           scope,
+		NumErrors:       numErrors,
+		Commands:        commands,
+		FailedCommands:  failedCommands,
+		RetriedCommands: retriedCommands,
 	}
 }
 
@@ -337,23 +344,55 @@ func (executor *GPDBExecutor) ExecuteLocalCommandWithContext(commandStr string, 
 	return string(output), err
 }
 
+// Create a new exec.Command object so we can run it again
+func resetCmd(cmd *exec.Cmd) *exec.Cmd {
+	path := cmd.Path
+	args := cmd.Args
+	return exec.Command(path, args...)
+}
+
+/*
+ * ExecuteClusterCommandWithRetries, but only 1 attempt to keep the previous functionality
+ */
+func (executor *GPDBExecutor) ExecuteClusterCommand(scope Scope, commandList []ShellCommand) *RemoteOutput {
+	return executor.ExecuteClusterCommandWithRetries(scope, commandList, 1, 0)
+}
+
 /*
  * This function just executes all of the commands passed to it in parallel; it
  * doesn't care about the scope of the command except to pass that on to the
  * RemoteOutput after execution.
+ *
+ * It will retry the command up to maxAttempts times
  * TODO: Add batching to prevent bottlenecks when executing in a huge cluster.
  */
-func (executor *GPDBExecutor) ExecuteClusterCommand(scope Scope, commandList []ShellCommand) *RemoteOutput {
+func (executor *GPDBExecutor) ExecuteClusterCommandWithRetries(scope Scope, commandList []ShellCommand, maxAttempts int, retrySleep time.Duration) *RemoteOutput {
 	length := len(commandList)
 	finished := make(chan int)
 	numErrors := 0
 	for i := range commandList {
 		go func(index int) {
+			var (
+				out    []byte
+				err    error
+				stderr bytes.Buffer
+			)
 			command := commandList[index]
-			var stderr bytes.Buffer
-			cmd := command.Command
-			cmd.Stderr = &stderr
-			out, err := cmd.Output()
+			for attempt := 1; attempt <= maxAttempts; attempt++ {
+				stderr.Reset()
+				cmd := resetCmd(command.Command)
+				cmd.Stderr = &stderr
+				out, err = cmd.Output()
+				if err == nil {
+					break
+				} else {
+					newRetryErr := fmt.Errorf("attempt %d: error was %w: %s", attempt, err, stderr.String())
+					command.RetryError = joinerrs.Join(command.RetryError, newRetryErr)
+					if attempt != maxAttempts {
+						time.Sleep(retrySleep)
+					}
+				}
+			}
 			command.Stdout = string(out)
 			command.Stderr = stderr.String()
 			command.Error = err
@@ -386,6 +425,19 @@ func (cluster *Cluster) GenerateAndExecuteCommand(verboseMsg string, scope Scope
 }
 
 func (cluster *Cluster) CheckClusterError(remoteOutput *RemoteOutput, finalErrMsg string, messageFunc interface{}, noFatal ...bool) {
+	for _, retriedCommand := range remoteOutput.RetriedCommands {
+		switch messageFunc.(type) {
+		case func(content int) string:
+			content := retriedCommand.Content
+			host := cluster.GetHostForContent(content)
+			gplog.Debug("Command failed before passing on segment %d on host %s with error:\n%v", content, host, retriedCommand.RetryError)
+		case func(host string) string:
+			host := retriedCommand.Host
+			gplog.Debug("Command failed before passing on host %s with error:\n%v", host, retriedCommand.RetryError)
+		}
+		gplog.Debug("Command was: %s", retriedCommand.CommandString)
+	}
+
 	if remoteOutput.NumErrors == 0 {
 		return
 	}
